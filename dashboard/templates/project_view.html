@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project[1] }} - Dashboard{% endblock %}
+
+{% block content %}
+<div class="back-link"><a href="/">← Back to Dashboard</a></div>
+
+<h1>{{ project[1] }}</h1>
+
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-label">Customer</div>
+        <div style="font-size: 18px; margin-top: 10px;">{{ project[2] or 'N/A' }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Status</div>
+        <div style="font-size: 18px; margin-top: 10px;">
+            <span class="status-badge status-{{ project[3] | lower | replace(' ', '-') }}">{{ project[3] }}</span>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ project[4] }}%</div>
+        <div class="metric-label">Progress</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Owner</div>
+        <div style="font-size: 18px; margin-top: 10px;">{{ project[5] }}</div>
+    </div>
+</div>
+
+<h2>Project Updates</h2>
+{% if updates %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Summary</th>
+                <th>Milestone</th>
+                <th>Blocker</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for update in updates %}
+            <tr>
+                <td>{{ update[1] }}</td>
+                <td>{{ update[2] }}</td>
+                <td>{{ update[4] or 'N/A' }}</td>
+                <td>{% if update[3] %}<div class="blocker" style="margin:0; padding: 4px;">{{ update[3] }}</div>{% else %}None{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>No updates recorded for this project yet.</p>
+{% endif %}
+{% endblock %}

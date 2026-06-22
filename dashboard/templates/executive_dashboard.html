@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Executive Dashboard{% endblock %}
+
+{% block content %}
+<h1>Executive Project Summary</h1>
+
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-value">{{ data.total_projects }}</div>
+        <div class="metric-label">Total Projects</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ data.on_track }}</div>
+        <div class="metric-label">On Track</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ data.at_risk }}</div>
+        <div class="metric-label">At Risk</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-value">{{ data.delayed }}</div>
+        <div class="metric-label">Delayed</div>
+    </div>
+</div>
+
+<h2>Recent Accomplishments</h2>
+{% if data.accomplishments %}
+    {% for acc in data.accomplishments %}
+        <div class="accomplishment">{{ acc }}</div>
+    {% endfor %}
+{% else %}
+    <p>No accomplishments recorded yet.</p>
+{% endif %}
+
+<h2>Open Blockers</h2>
+{% if data.blockers %}
+    {% for blocker in data.blockers %}
+        <div class="blocker">{{ blocker }}</div>
+    {% endfor %}
+{% else %}
+    <p>No blockers reported.</p>
+{% endif %}
+
+<h2>All Projects</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Project Name</th>
+            <th>Customer</th>
+            <th>Status</th>
+            <th>Progress</th>
+            <th>Owner</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for project in data.projects %}
+        <tr>
+            <td><a href="/project/{{ project[0] }}">{{ project[1] }}</a></td>
+            <td>{{ project[2] or 'N/A' }}</td>
+            <td>
+                <span class="status-badge status-{{ project[3] | lower | replace(' ', '-') }}">
+                    {{ project[3] }}
+                </span>
+            </td>
+            <td>{{ project[4] }}%</td>
+            <td>{{ project[5] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

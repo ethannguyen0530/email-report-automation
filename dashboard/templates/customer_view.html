@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}{{ customer[1] }} - Dashboard{% endblock %}
+
+{% block content %}
+<div class="back-link"><a href="/">← Back to Dashboard</a></div>
+
+<h1>{{ customer[1] }}</h1>
+
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-value">{{ projects | length }}</div>
+        <div class="metric-label">Projects</div>
+    </div>
+</div>
+
+<h2>Projects for {{ customer[1] }}</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Project Name</th>
+            <th>Status</th>
+            <th>Progress</th>
+            <th>Owner</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for project in projects %}
+        <tr>
+            <td><a href="/project/{{ project[0] }}">{{ project[1] }}</a></td>
+            <td><span class="status-badge status-{{ project[2] | lower | replace(' ', '-') }}">{{ project[2] }}</span></td>
+            <td>{{ project[3] }}%</td>
+            <td>{{ project[4] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
