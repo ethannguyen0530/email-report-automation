@@ -204,13 +204,32 @@ class DatabaseManager:
         status_counts = {row[0]: row[1] for row in cursor.fetchall()}
 
         cursor.execute("""
-            SELECT u.owner_name, u.milestone, u.update_date
+            SELECT DISTINCT u.owner_name, u.summary, u.milestone, p.project_name, u.update_date
             FROM updates u
+            JOIN projects p ON u.project_id = p.id
+            WHERE u.summary IS NOT NULL AND u.summary != '' AND u.summary != 'TBD'
             ORDER BY u.update_date DESC LIMIT 10
         """)
-        accomplishments = [f"{row[0]} completed {row[1]} on {row[2][:10]}" for row in cursor.fetchall()]
+        accomplishments = []
+        for row in cursor.fetchall():
+            owner = row[0] if row[0] and row[0] not in ('Unknown', 'TBD', '') else None
+            summary = row[1]
+            milestone = row[2] if row[2] and row[2] not in ('TBD', '') else None
+            project = row[3]
+            date = (row[4] or '')[:10]
+            if owner and milestone:
+                acc = f"{owner} — {milestone} on {project} ({date})"
+            elif owner:
+                acc = f"{owner}: {summary[:120]}"
+            else:
+                acc = f"{project}: {summary[:120]}"
+            accomplishments.append(acc)
 
-        cursor.execute("SELECT blocker FROM updates WHERE blocker IS NOT NULL ORDER BY update_date DESC LIMIT 5")
+        cursor.execute("""
+            SELECT DISTINCT blocker FROM updates
+            WHERE blocker IS NOT NULL AND blocker != '' AND blocker != 'TBD'
+            ORDER BY update_date DESC LIMIT 5
+        """)
         blockers = [row[0] for row in cursor.fetchall()]
 
         cursor.execute("""
