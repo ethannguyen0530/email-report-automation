@@ -76,16 +76,26 @@ class GmailService:
 
     def _get_body(self, message):
         try:
-            if 'parts' in message['payload']:
-                for part in message['payload']['parts']:
-                    if part['mimeType'] == 'text/plain':
-                        data = part['body'].get('data', '')
-                        if data:
-                            return base64.urlsafe_b64decode(data).decode('utf-8')
-            else:
-                data = message['payload']['body'].get('data', '')
-                if data:
-                    return base64.urlsafe_b64decode(data).decode('utf-8')
-        except:
-            pass
+            return self._extract_text(message['payload']) or ''
+        except Exception:
+            return ''
+
+    def _extract_text(self, payload):
+        # Prefer plain text
+        if payload.get('mimeType') == 'text/plain':
+            data = payload.get('body', {}).get('data', '')
+            if data:
+                return base64.urlsafe_b64decode(data).decode('utf-8', errors='replace')
+        # Recurse into parts (handles nested multipart/alternative, multipart/mixed)
+        for part in payload.get('parts', []):
+            result = self._extract_text(part)
+            if result:
+                return result
+        # Fall back to HTML if no plain text found anywhere
+        if payload.get('mimeType') == 'text/html':
+            data = payload.get('body', {}).get('data', '')
+            if data:
+                raw = base64.urlsafe_b64decode(data).decode('utf-8', errors='replace')
+                import re
+                return re.sub(r'<[^>]+>', ' ', raw)
         return ''

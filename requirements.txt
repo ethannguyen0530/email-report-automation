@@ -3,8 +3,9 @@ google-auth-httplib2==0.2.0
 google-api-python-client==2.108.0
 slack-sdk==3.27.1
 flask==3.0.0
-pandas==2.2.0
+flask-cors==4.0.0
 python-dotenv==1.0.0
 requests==2.32.3
 openai>=1.50.0
-flask-cors==4.0.0
+apscheduler==3.10.4
+gunicorn==21.2.0

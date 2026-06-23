@@ -18,18 +18,19 @@ class ExtractionService:
         Extract project information from this email. Return ONLY a JSON object (no markdown, no extra text).
 
         Required fields:
-        - customer: Customer name (string)
+        - customer: Customer/client name (string)
         - project: Project name (string)
-        - status: One of ['On Track', 'At Risk', 'Delayed', 'Completed'] (string)
+        - status: One of exactly ['On Track', 'At Risk', 'Delayed', 'Completed', 'In Progress'] (string)
         - progress: Progress percentage 0-100 (integer)
-        - milestone: Latest milestone or current focus (string)
-        - blocker: Any blockers mentioned, or null (string or null)
-        - owner: Person sending/mentioned (string)
+        - summary: One sentence describing the current status or key update, e.g. "UAT testing scheduled for next week" or "Integration complete, awaiting client sign-off" (string)
+        - milestone: Latest completed deliverable or upcoming milestone, e.g. "Phase 1 UAT approved" or "Data migration complete" — null if none mentioned (string or null)
+        - blocker: Specific blocker or dependency, e.g. "Waiting for client approval on data model" — null if none (string or null)
+        - owner: Person sending or responsible for this update (string)
 
         Email Subject: {email_subject}
 
         Email Body:
-        {email_text[:1000]}
+        {email_text[:3000]}
 
         Return valid JSON only:
         """
@@ -62,7 +63,8 @@ class ExtractionService:
             "project": self.extract_project_name(subject),
             "status": "In Progress",
             "progress": 50,
-            "milestone": "TBD",
+            "summary": None,
+            "milestone": None,
             "blocker": None,
             "owner": "Unknown"
         }

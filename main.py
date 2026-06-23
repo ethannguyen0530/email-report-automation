@@ -69,10 +69,10 @@ def process_mock_emails():
             db.insert_update(
                 proj_id,
                 email['date'],
-                f"Update from: {email['subject']}",
-                extracted['blocker'],
-                extracted['milestone'],
-                extracted['owner']
+                extracted.get('summary') or extracted.get('milestone') or email['subject'][:120],
+                extracted.get('blocker'),
+                extracted.get('milestone'),
+                extracted.get('owner', 'Unknown')
             )
 
         db.mark_email_processed(email['id'])
@@ -120,10 +120,10 @@ def process_real_emails():
             db.insert_update(
                 proj_id,
                 email['date'],
-                f"Update from: {email['subject']}",
-                extracted['blocker'],
-                extracted['milestone'],
-                extracted['owner']
+                extracted.get('summary') or extracted.get('milestone') or email['subject'][:120],
+                extracted.get('blocker'),
+                extracted.get('milestone'),
+                extracted.get('owner', 'Unknown')
             )
 
         db.mark_email_processed(email['id'])

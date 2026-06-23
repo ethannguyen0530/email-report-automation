@@ -67,22 +67,31 @@ class ReportService:
             for b in summary_data['blockers']
         ]) or '<p style="color:#94a3b8;font-size:14px;margin:0;padding:12px 0">No blockers reported.</p>'
 
-        # Project notes
+        # Project highlights — blockers in red, milestones in green, notes in purple
         notes = summary_data.get('project_notes', [])
-        notes_html = ''.join([f"""
-            <div style="padding:16px;background:#f8fafc;border-radius:10px;border-left:3px solid #7c3aed;margin-bottom:10px">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-                    <div>
+        TYPE_STYLE = {
+            'blocker':   {'border': '#ef4444', 'bg': '#fff5f5', 'label': 'BLOCKER',   'lc': '#ef4444', 'tc': '#7f1d1d'},
+            'milestone': {'border': '#22c55e', 'bg': '#f0fdf4', 'label': 'MILESTONE', 'lc': '#16a34a', 'tc': '#14532d'},
+            'note':      {'border': '#7c3aed', 'bg': '#faf5ff', 'label': 'NOTE',      'lc': '#7c3aed', 'tc': '#3b0764'},
+        }
+        notes_html = ''
+        for n in notes:
+            s = TYPE_STYLE.get(n.get('type', 'note'), TYPE_STYLE['note'])
+            sc = STATUS_COLORS.get(n.get('status', ''), {'dot': '#94a3b8', 'text': '#64748b', 'bg': '#f1f5f9'})
+            notes_html += f"""
+            <div style="padding:14px 16px;background:{s['bg']};border-radius:10px;border-left:3px solid {s['border']};margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
+                <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
                         <span style="font-weight:700;color:#1e293b;font-size:13px">{n['project']}</span>
-                        {f'<span style="color:#94a3b8;font-size:12px"> · {n["customer"]}</span>' if n.get("customer") else ''}
+                        {f'<span style="color:#94a3b8;font-size:12px">· {n["customer"]}</span>' if n.get("customer") else ''}
+                        <span style="font-size:9px;font-weight:800;letter-spacing:0.08em;color:{s['lc']};background:{s['border']}18;padding:2px 7px;border-radius:99px">{s['label']}</span>
                     </div>
-                    <span style="font-size:11px;color:#94a3b8;white-space:nowrap;margin-left:12px">{(n.get('date') or '')[:10]}</span>
+                    <p style="margin:0;color:{s['tc']};font-size:13px;line-height:1.6">{n['note']}</p>
                 </div>
-                <p style="margin:0;color:#475569;font-size:13px;line-height:1.6">{n['note']}</p>
-                {f'<p style="margin:6px 0 0;font-size:11px;color:#94a3b8">— {n["owner"]}</p>' if n.get("owner") and n["owner"] != "Unknown" else ''}
+                <span style="font-size:11px;color:#94a3b8;white-space:nowrap;flex-shrink:0">{(n.get('date') or '')[:10]}</span>
             </div>"""
-            for n in notes
-        ]) or '<p style="color:#94a3b8;font-size:14px;margin:0;padding:12px 0">No project notes on record.</p>'
+        if not notes_html:
+            notes_html = '<p style="color:#94a3b8;font-size:14px;margin:0;padding:12px 0">No key highlights on record yet.</p>'
 
         # Metric cards
         def metric_card(value, label, color):
@@ -155,7 +164,7 @@ class ReportService:
   <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin-bottom:28px">
     <div style="padding:18px 24px 14px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px">
       <div style="width:3px;height:16px;background:#7c3aed;border-radius:99px"></div>
-      <h2 style="font-size:13px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:0.05em">Project Notes</h2>
+      <h2 style="font-size:13px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:0.05em">Key Highlights & Blockers</h2>
     </div>
     <div style="padding:16px 24px">{notes_html}</div>
   </div>

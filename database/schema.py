@@ -232,44 +232,42 @@ class DatabaseManager:
         """)
         blockers = [row[0] for row in cursor.fetchall()]
 
-        # One note per project — most recent update with real content
+        # Key project highlights: one note per project — milestone or blocker only, no filler
         cursor.execute("""
-            SELECT p.project_name, c.name, u.milestone, u.summary, u.update_date, u.owner_name
+            SELECT p.project_name, c.name, p.status, u.milestone, u.blocker, u.summary, u.update_date, u.owner_name
             FROM updates u
             JOIN projects p ON u.project_id = p.id
             LEFT JOIN customers c ON p.customer_id = c.id
             WHERE (
                 (u.milestone IS NOT NULL AND u.milestone != '' AND u.milestone != 'TBD')
-                OR
-                (u.summary IS NOT NULL AND u.summary != '' AND u.summary != 'TBD'
-                 AND u.summary NOT LIKE 'Update from:%'
-                 AND u.summary NOT LIKE 'No specific%'
-                 AND length(u.summary) > 20)
+                OR (u.blocker IS NOT NULL AND u.blocker != '' AND u.blocker != 'TBD')
+                OR (u.summary IS NOT NULL AND length(u.summary) > 20
+                    AND u.summary NOT LIKE 'Update from:%'
+                    AND u.summary NOT LIKE 'No specific%'
+                    AND u.summary NOT LIKE 'Unknown%'
+                    AND u.summary != 'TBD')
             )
-            AND u.update_date = (
-                SELECT MAX(u2.update_date) FROM updates u2
-                WHERE u2.project_id = u.project_id
-                AND (
-                    (u2.milestone IS NOT NULL AND u2.milestone != '' AND u2.milestone != 'TBD')
-                    OR (u2.summary IS NOT NULL AND u2.summary != '' AND u2.summary != 'TBD'
-                        AND u2.summary NOT LIKE 'Update from:%'
-                        AND u2.summary NOT LIKE 'No specific%'
-                        AND length(u2.summary) > 20)
-                )
-            )
-            ORDER BY u.update_date DESC LIMIT 15
+            ORDER BY u.update_date DESC LIMIT 50
         """)
         project_notes = []
         seen_projects = set()
         for r in cursor.fetchall():
-            if r[0] in seen_projects:
+            proj_name = r[0]
+            if proj_name in seen_projects:
                 continue
-            milestone = r[2] if r[2] and r[2] not in ('TBD', '') else None
-            summary = r[3] if r[3] and r[3] not in ('TBD', '') and not r[3].startswith('Update from:') else None
-            note = milestone if milestone else summary
+            status = r[2]
+            milestone = r[3] if r[3] and r[3] not in ('TBD', '') else None
+            blocker = r[4] if r[4] and r[4] not in ('TBD', '') else None
+            summary = r[5] if r[5] and len(r[5]) > 20 and not r[5].startswith('Update from:') else None
+            # Priority: blocker (most urgent) > milestone > summary
+            note = blocker if blocker else (milestone if milestone else summary)
+            note_type = 'blocker' if blocker else ('milestone' if milestone else 'note')
             if note:
-                project_notes.append({'project': r[0], 'customer': r[1], 'note': note, 'date': r[4], 'owner': r[5]})
-                seen_projects.add(r[0])
+                project_notes.append({
+                    'project': proj_name, 'customer': r[1], 'status': status,
+                    'note': note, 'type': note_type, 'date': r[6], 'owner': r[7]
+                })
+                seen_projects.add(proj_name)
 
         conn.close()
 
