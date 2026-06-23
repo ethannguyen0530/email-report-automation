@@ -232,18 +232,44 @@ class DatabaseManager:
         """)
         blockers = [row[0] for row in cursor.fetchall()]
 
+        # One note per project — most recent update with real content
         cursor.execute("""
-            SELECT p.project_name, c.name, u.summary, u.update_date, u.owner_name
+            SELECT p.project_name, c.name, u.milestone, u.summary, u.update_date, u.owner_name
             FROM updates u
             JOIN projects p ON u.project_id = p.id
             LEFT JOIN customers c ON p.customer_id = c.id
-            WHERE u.summary IS NOT NULL AND u.summary != ''
-            ORDER BY u.update_date DESC LIMIT 20
+            WHERE (
+                (u.milestone IS NOT NULL AND u.milestone != '' AND u.milestone != 'TBD')
+                OR
+                (u.summary IS NOT NULL AND u.summary != '' AND u.summary != 'TBD'
+                 AND u.summary NOT LIKE 'Update from:%'
+                 AND u.summary NOT LIKE 'No specific%'
+                 AND length(u.summary) > 20)
+            )
+            AND u.update_date = (
+                SELECT MAX(u2.update_date) FROM updates u2
+                WHERE u2.project_id = u.project_id
+                AND (
+                    (u2.milestone IS NOT NULL AND u2.milestone != '' AND u2.milestone != 'TBD')
+                    OR (u2.summary IS NOT NULL AND u2.summary != '' AND u2.summary != 'TBD'
+                        AND u2.summary NOT LIKE 'Update from:%'
+                        AND u2.summary NOT LIKE 'No specific%'
+                        AND length(u2.summary) > 20)
+                )
+            )
+            ORDER BY u.update_date DESC LIMIT 15
         """)
-        project_notes = [
-            {'project': r[0], 'customer': r[1], 'note': r[2], 'date': r[3], 'owner': r[4]}
-            for r in cursor.fetchall()
-        ]
+        project_notes = []
+        seen_projects = set()
+        for r in cursor.fetchall():
+            if r[0] in seen_projects:
+                continue
+            milestone = r[2] if r[2] and r[2] not in ('TBD', '') else None
+            summary = r[3] if r[3] and r[3] not in ('TBD', '') and not r[3].startswith('Update from:') else None
+            note = milestone if milestone else summary
+            if note:
+                project_notes.append({'project': r[0], 'customer': r[1], 'note': note, 'date': r[4], 'owner': r[5]})
+                seen_projects.add(r[0])
 
         conn.close()
 

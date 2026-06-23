@@ -51,12 +51,7 @@ export default function Sidebar({ current, navigate }) {
         })}
       </nav>
 
-      <div style={{ marginTop: 'auto', padding: '0 8px' }}>
-        <div style={{ width: '100%', height: 1, background: 'var(--border)', marginBottom: 16 }} />
-        <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          Email Report<br />Automation
-        </p>
-      </div>
+      <div style={{ marginTop: 'auto' }} />
     </aside>
   )
 }
