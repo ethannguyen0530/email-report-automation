@@ -16,24 +16,43 @@ echo "Installing email-report-automation as a macOS service..."
 echo "  Project: $ROOT"
 echo "  Python:  $PYTHON"
 
-# Install gunicorn and apscheduler if needed
-pip3 install -q gunicorn apscheduler
+# Install Python dependencies
+echo "Installing Python dependencies..."
+pip3 install -q -r "$ROOT/requirements.txt"
 
-# Build React frontend
-echo "Building React frontend..."
-bash "$ROOT/run.sh" --build-only 2>/dev/null || true
+# Find npm and build React frontend
 NPM=""
-for candidate in "/tmp/node-v22.16.0-darwin-arm64/bin/npm" "/usr/local/bin/npm" "/opt/homebrew/bin/npm" "$(which npm 2>/dev/null)"; do
-    if [ -x "$candidate" ]; then NPM="$candidate"; break; fi
+for candidate in \
+    "/tmp/node-v22.16.0-darwin-arm64/bin/npm" \
+    "/usr/local/bin/npm" \
+    "/opt/homebrew/bin/npm" \
+    "$(which npm 2>/dev/null)"; do
+    if [ -x "$candidate" ]; then
+        NPM="$candidate"
+        break
+    fi
 done
+
 if [ -n "$NPM" ]; then
+    echo "Building React frontend..."
+    export PATH="$(dirname "$NPM"):$PATH"
     cd "$ROOT/frontend" && "$NPM" run build
     cd "$ROOT"
+else
+    echo "Warning: npm not found — using existing frontend/dist if present."
+fi
+
+if [ ! -f "$ROOT/frontend/dist/index.html" ]; then
+    echo "Error: frontend/dist/index.html not found. Please build the frontend first:"
+    echo "  cd $ROOT/frontend && npm run build"
+    exit 1
 fi
 
 mkdir -p "$ROOT/logs"
 
-# Write the launchd plist
+# Determine Python's bin dir so gunicorn is found
+PYTHON_BIN="$(dirname "$PYTHON")"
+
 cat > "$PLIST" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -48,7 +67,7 @@ cat > "$PLIST" << EOF
         <string>gunicorn</string>
         <string>dashboard.app:app</string>
         <string>--bind</string>
-        <string>0.0.0.0:5001</string>
+        <string>127.0.0.1:5001</string>
         <string>--workers</string>
         <string>1</string>
         <string>--timeout</string>
@@ -63,7 +82,7 @@ cat > "$PLIST" << EOF
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <string>$PYTHON_BIN:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
@@ -79,19 +98,15 @@ cat > "$PLIST" << EOF
 </plist>
 EOF
 
-# Unload if already running
 launchctl unload "$PLIST" 2>/dev/null || true
-
-# Load the service
 launchctl load "$PLIST"
 
 echo ""
-echo "Service installed and started."
+echo "Service installed and running."
 echo "  Dashboard: http://localhost:5001"
 echo "  Logs:      $ROOT/logs/server.log"
 echo ""
 echo "Commands:"
 echo "  Stop:      launchctl unload $PLIST"
-echo "  Start:     launchctl load $PLIST"
 echo "  Restart:   launchctl unload $PLIST && launchctl load $PLIST"
 echo "  Uninstall: launchctl unload $PLIST && rm $PLIST"
