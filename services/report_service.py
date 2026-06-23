@@ -8,7 +8,11 @@ class ReportService:
     def generate_executive_report_html(self, summary_data):
         projects_html = ""
         for proj in summary_data['projects']:
-            proj_id, proj_name, customer, status, progress, owner = proj
+            # supports both tuple (id,name,customer,status,progress,owner[,last_updated]) and dict
+            if isinstance(proj, dict):
+                proj_id, proj_name, customer, status, progress, owner = proj['id'], proj['name'], proj.get('customer'), proj['status'], proj['progress'], proj['owner']
+            else:
+                proj_id, proj_name, customer, status, progress, owner = proj[0], proj[1], proj[2], proj[3], proj[4], proj[5]
             status_color = {
                 'On Track': '#28a745',
                 'At Risk': '#ffc107',
