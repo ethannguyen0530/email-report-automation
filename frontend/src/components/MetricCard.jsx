@@ -1,15 +1,25 @@
-export default function MetricCard({ value, label, color = '#3b82f6' }) {
+export default function MetricCard({ value, label, color = '#7c3aed', icon }) {
   return (
     <div style={{
-      background: 'white',
-      borderRadius: 12,
-      padding: '20px 24px',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-      borderTop: `4px solid ${color}`,
-      textAlign: 'center',
-    }}>
-      <div style={{ fontSize: 40, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 13, color: '#64748b', marginTop: 6, fontWeight: 500 }}>{label}</div>
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius)',
+      padding: '22px 24px',
+      position: 'relative',
+      overflow: 'hidden',
+      transition: 'var(--transition)',
+    }}
+    onMouseEnter={e => e.currentTarget.style.borderColor = color + '55'}
+    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+    >
+      <div style={{
+        position: 'absolute', top: 0, right: 0,
+        width: 80, height: 80,
+        background: `radial-gradient(circle at top right, ${color}22, transparent 70%)`,
+        pointerEvents: 'none',
+      }} />
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: 10 }}>{label}</div>
+      <div style={{ fontSize: 36, fontWeight: 700, color, lineHeight: 1, letterSpacing: '-1px' }}>{value}</div>
     </div>
   )
 }

@@ -1,7 +1,13 @@
-from flask import Flask, render_template, jsonify
+import os
+from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
 from database.schema import DatabaseManager
 import config
+
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'uploads')
+ALLOWED_EXTENSIONS = {'pdf','txt','doc','docx','csv','png','jpg','jpeg','gif','webp'}
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__, template_folder='templates')
 CORS(app)
@@ -85,5 +91,26 @@ def api_project(project_id):
         ]
     })
 
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({'error': 'Empty filename'}), 400
+    ext = file.filename.rsplit('.', 1)[-1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return jsonify({'error': 'File type not allowed'}), 400
+    filename = secure_filename(file.filename)
+    path = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(path)
+    url = f'/api/uploads/{filename}'
+    return jsonify({'filename': filename, 'url': url})
+
+@app.route('/api/uploads/<filename>')
+def serve_upload(filename):
+    from flask import send_from_directory
+    return send_from_directory(os.path.abspath(UPLOAD_FOLDER), secure_filename(filename))
+
 if __name__ == '__main__':
-    app.run(debug=config.FLASK_DEBUG, port=5000)
+    app.run(debug=config.FLASK_DEBUG, port=5001)

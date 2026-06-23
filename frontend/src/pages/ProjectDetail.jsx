@@ -6,49 +6,46 @@ export default function ProjectDetail({ id, navigate }) {
   const [project, setProject] = useState(null)
 
   useEffect(() => {
-    fetch(`/api/projects/${id}`)
-      .then(r => r.json())
-      .then(setProject)
+    fetch(`/api/projects/${id}`).then(r => r.json()).then(setProject)
   }, [id])
 
-  if (!project) return <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>Loading...</div>
+  if (!project) return <Loading />
 
   return (
-    <div>
-      <button onClick={() => navigate('dashboard')}
-        style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 14, marginBottom: 20, padding: 0 }}>
-        ← Back to Dashboard
-      </button>
+    <div style={{ maxWidth: 900 }}>
+      <button onClick={() => navigate('dashboard')} style={backBtn}>← Back</button>
 
-      <div style={{ background: 'white', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', padding: 28, marginBottom: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
-          <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>{project.name}</h1>
-            <p style={{ color: '#64748b', fontSize: 14 }}>
-              Customer: <strong style={{ color: '#374151' }}>{project.customer || 'N/A'}</strong>
-              {' · '}Owner: <strong style={{ color: '#374151' }}>{project.owner}</strong>
-            </p>
-          </div>
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.5px' }}>{project.name}</h1>
           <StatusBadge status={project.status} />
         </div>
-        <div style={{ marginTop: 20, maxWidth: 360 }}>
-          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 6 }}>Progress</p>
-          <ProgressBar value={project.progress} />
-        </div>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 6 }}>
+          {project.customer && <><span style={{ color: 'var(--text-secondary)' }}>{project.customer}</span> · </>}
+          Owner: <span style={{ color: 'var(--text-secondary)' }}>{project.owner}</span>
+        </p>
       </div>
 
-      <div style={{ background: 'white', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Update History</h2>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 24, marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Progress</span>
+          <span style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>{project.progress}%</span>
+        </div>
+        <ProgressBar value={project.progress} />
+      </div>
+
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+          <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Update History</h2>
         </div>
         {project.updates.length === 0
-          ? <p style={{ padding: 20, color: '#94a3b8', fontSize: 14 }}>No updates recorded.</p>
+          ? <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>No updates recorded.</p>
           : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
-                <tr style={{ background: '#f8fafc' }}>
+                <tr>
                   {['Date', 'Summary', 'Milestone', 'Blocker'].map(h => (
-                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: '#64748b', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0' }}>
+                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid var(--border)' }}>
                       {h}
                     </th>
                   ))}
@@ -56,14 +53,14 @@ export default function ProjectDetail({ id, navigate }) {
               </thead>
               <tbody>
                 {project.updates.map(u => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '12px 16px', color: '#64748b', whiteSpace: 'nowrap' }}>{u.date}</td>
-                    <td style={{ padding: '12px 16px', color: '#374151' }}>{u.summary}</td>
-                    <td style={{ padding: '12px 16px', color: '#374151' }}>{u.milestone || '—'}</td>
+                  <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '12px 16px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{u.date}</td>
+                    <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>{u.summary}</td>
+                    <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>{u.milestone || '—'}</td>
                     <td style={{ padding: '12px 16px' }}>
                       {u.blocker
-                        ? <span style={{ background: '#fee2e2', color: '#991b1b', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>{u.blocker}</span>
-                        : <span style={{ color: '#94a3b8' }}>None</span>
+                        ? <span style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '1px solid rgba(239,68,68,0.2)' }}>{u.blocker}</span>
+                        : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>None</span>
                       }
                     </td>
                   </tr>
@@ -75,4 +72,15 @@ export default function ProjectDetail({ id, navigate }) {
       </div>
     </div>
   )
+}
+
+const backBtn = {
+  background: 'none', border: 'none', color: 'var(--text-muted)',
+  cursor: 'pointer', fontSize: 13, padding: 0, marginBottom: 24,
+  display: 'flex', alignItems: 'center', gap: 4,
+  transition: 'color 0.15s',
+}
+
+function Loading() {
+  return <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 40 }}>Loading...</div>
 }

@@ -80,6 +80,57 @@ def process_mock_emails():
     print(f"Processed {len(MOCK_EMAILS)} mock emails")
 
 
+def process_real_emails():
+    print("\nConnecting to Gmail...")
+
+    gmail = GmailService(config.GMAIL_CREDENTIALS_FILE)
+    if not gmail.service:
+        print("Gmail authentication failed. Check credentials.json.")
+        return
+
+    extraction = ExtractionService()
+    db = DatabaseManager(config.DB_PATH)
+
+    print(f"Fetching emails with query: {config.GMAIL_QUERY}")
+    emails = gmail.get_emails(query=config.GMAIL_QUERY, max_results=config.GMAIL_MAX_RESULTS)
+
+    if not emails:
+        print("No emails found matching the query.")
+        return
+
+    print(f"Found {len(emails)} emails. Processing...")
+
+    for email in emails:
+        print(f"\n  Processing: {email['subject']}")
+
+        db.insert_email(email['id'], email['from'], email['subject'], email['body'], email['date'])
+
+        extracted = extraction.extract_project_info(email['body'], email['subject'])
+        print(f"    Extracted: {extracted['project']} ({extracted['customer']})")
+
+        cust_id = db.get_or_create_customer(extracted['customer'])
+        if cust_id:
+            proj_id = db.get_or_create_project(
+                cust_id,
+                extracted['project'],
+                extracted['status'],
+                extracted['progress'],
+                extracted['owner']
+            )
+            db.insert_update(
+                proj_id,
+                email['date'],
+                f"Update from: {email['subject']}",
+                extracted['blocker'],
+                extracted['milestone'],
+                extracted['owner']
+            )
+
+        db.mark_email_processed(email['id'])
+
+    print(f"\nProcessed {len(emails)} real emails")
+
+
 def generate_and_send_reports():
     print("\nGenerating executive report...")
 
@@ -108,13 +159,14 @@ def generate_and_send_reports():
 
 def show_menu():
     while True:
+        mode = "REAL Gmail" if not config.USE_MOCK_DATA else "Mock Data"
         print("\n" + "=" * 60)
-        print("EMAIL-TO-REPORT AUTOMATION SYSTEM")
+        print(f"EMAIL-TO-REPORT AUTOMATION SYSTEM  [{mode}]")
         print("=" * 60)
         print("1. Seed database with mock data")
-        print("2. Process mock emails & extract data")
+        print(f"2. Fetch & process emails ({mode})")
         print("3. Generate & send executive report (email + Slack)")
-        print("4. Start dashboard (http://localhost:5000)")
+        print("4. Start dashboard (http://localhost:5001)")
         print("5. Run full pipeline (all of the above)")
         print("6. Exit")
         print("=" * 60)
@@ -124,19 +176,25 @@ def show_menu():
         if choice == '1':
             seed_database_with_mock_data()
         elif choice == '2':
-            process_mock_emails()
+            if config.USE_MOCK_DATA:
+                process_mock_emails()
+            else:
+                process_real_emails()
         elif choice == '3':
             generate_and_send_reports()
         elif choice == '4':
-            print("\nStarting dashboard on http://localhost:5000")
+            print("\nStarting dashboard on http://localhost:5001")
             print("Press Ctrl+C to stop")
             try:
-                app.run(debug=config.FLASK_DEBUG, port=5000, use_reloader=False)
+                app.run(debug=config.FLASK_DEBUG, port=5001, use_reloader=False)
             except KeyboardInterrupt:
                 print("\nDashboard stopped")
         elif choice == '5':
-            seed_database_with_mock_data()
-            process_mock_emails()
+            if config.USE_MOCK_DATA:
+                seed_database_with_mock_data()
+                process_mock_emails()
+            else:
+                process_real_emails()
             generate_and_send_reports()
             print("\nFull pipeline complete!")
             print("Next: Start the dashboard (option 4) to view results")
@@ -150,16 +208,16 @@ def show_menu():
 def main():
     print("\nEMAIL-TO-REPORT AUTOMATION SYSTEM")
     print("=" * 60)
-    print("Building with mock data. Add real credentials later.")
-    print("=" * 60)
 
-    if not os.path.exists(config.GMAIL_CREDENTIALS_FILE):
-        print("\nGmail credentials.json not found")
-        print("   To use real Gmail API:")
-        print("   1. Download from Google Cloud Console")
-        print("   2. Save as: credentials.json")
-        print("   3. Run again")
-        print("\n   For now, using mock emails for testing.")
+    if config.USE_MOCK_DATA:
+        print("Mode: MOCK DATA")
+    else:
+        if os.path.exists(config.GMAIL_CREDENTIALS_FILE):
+            print("Mode: REAL Gmail (credentials.json found)")
+        else:
+            print("WARNING: USE_MOCK_DATA=False but credentials.json not found!")
+            print("   Download credentials.json from Google Cloud Console.")
+    print("=" * 60)
 
     show_menu()
 
