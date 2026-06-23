@@ -6,12 +6,15 @@ export default function Report() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(null)
 
-  useEffect(() => {
+  const loadReport = () => {
+    setLoading(true)
     fetch('/api/report')
       .then(r => r.text())
       .then(text => { setHtml(text); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { loadReport() }, [])
 
   const sendReport = async () => {
     setSending(true)
@@ -35,6 +38,10 @@ export default function Report() {
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             {sent === 'success' && <span style={{ fontSize: 13, color: '#22c55e' }}>✓ Sent</span>}
             {sent === 'error' && <span style={{ fontSize: 13, color: '#ef4444' }}>Failed — check .env credentials</span>}
+            <button onClick={loadReport} disabled={loading}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
+              {loading ? 'Loading...' : '↻ Refresh'}
+            </button>
             <button onClick={sendReport} disabled={sending}
               style={{
                 background: 'linear-gradient(135deg, #7c3aed, #a855f7)',

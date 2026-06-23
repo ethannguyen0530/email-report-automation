@@ -41,20 +41,20 @@ export default function StatusSelect({ projectId, value, onChange }) {
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, zIndex: 999, marginTop: 4,
-          background: '#1e1e1e', border: '1px solid var(--border)',
+          background: '#ffffff', border: '1px solid var(--border)',
           borderRadius: 10, padding: 4, minWidth: 140,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          boxShadow: '0 8px 24px rgba(13,6,31,0.12)',
         }}>
           {OPTIONS.map(opt => (
             <button key={opt} onClick={() => select(opt)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 width: '100%', padding: '8px 10px', border: 'none',
-                background: opt === value ? 'rgba(255,255,255,0.05)' : 'none',
+                background: opt === value ? 'rgba(115,31,227,0.06)' : 'none',
                 cursor: 'pointer', borderRadius: 6, textAlign: 'left',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
-              onMouseLeave={e => e.currentTarget.style.background = opt === value ? 'rgba(255,255,255,0.05)' : 'none'}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(115,31,227,0.06)'}
+              onMouseLeave={e => e.currentTarget.style.background = opt === value ? 'rgba(115,31,227,0.06)' : 'none'}
             >
               <StatusBadge status={opt} />
             </button>

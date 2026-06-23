@@ -6,6 +6,8 @@ import CustomerDetail from './pages/CustomerDetail'
 import Uploads from './pages/Uploads'
 import Emails from './pages/Emails'
 import Report from './pages/Report'
+import Settings from './pages/Settings'
+import Customers from './pages/Customers'
 import './App.css'
 
 export default function App() {
@@ -28,6 +30,8 @@ export default function App() {
         {page.name === 'uploads'    && <Uploads />}
         {page.name === 'emails'     && <Emails />}
         {page.name === 'report'     && <Report />}
+        {page.name === 'customers'  && <Customers navigate={navigate} />}
+        {page.name === 'settings'   && <Settings />}
       </main>
     </div>
   )

@@ -1,35 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700&display=swap');
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0d0d0d;
-  --bg-card: #161616;
-  --bg-hover: #1e1e1e;
-  --bg-elevated: #1a1a1a;
-  --border: rgba(255,255,255,0.07);
-  --text-primary: #f0f0f0;
-  --text-secondary: #888;
-  --text-muted: #555;
-  --accent: #7c3aed;
-  --accent-light: #a855f7;
-  --accent-glow: rgba(124,58,237,0.25);
-  --green: #22c55e;
-  --yellow: #f59e0b;
-  --red: #ef4444;
-  --sidebar-width: 220px;
-  --radius: 12px;
-  --transition: 0.2s ease;
+  /* Autonomize brand colors — from brand guidelines */
+  --bg:          #F9F7F6;
+  --bg-card:     #ffffff;
+  --bg-hover:    #f3f0f8;
+  --bg-elevated: #f0edf8;
+  --border:      #E3DFDE;
+  --border-accent: rgba(115,31,227,0.2);
+
+  --text-primary:   #0D061F;
+  --text-secondary: #4a3f6b;
+  --text-muted:     #8a7fa8;
+
+  --accent:       #731FE3;
+  --accent-light: #9B51E0;
+  --accent-bg:    rgba(115,31,227,0.08);
+  --accent-glow:  rgba(115,31,227,0.2);
+  --orange:       #F86442;
+  --orange-bg:    rgba(248,100,66,0.1);
+
+  --green:  #16a34a;
+  --yellow: #d97706;
+  --red:    #dc2626;
+
+  --sidebar-width: 228px;
+  --radius:        12px;
+  --transition:    0.18s ease;
+
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: 'Inter Tight', 'Inter', sans-serif;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--text-primary);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 
+h1, h2, h3 { font-family: var(--font-heading); }
+
 a { text-decoration: none; color: inherit; }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: rgba(115,31,227,0.25); border-radius: 99px; }

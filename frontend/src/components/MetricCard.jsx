@@ -14,8 +14,8 @@ export default function MetricCard({ value, label, color = '#7c3aed', onClick, a
         transform: active ? 'translateY(-1px)' : 'none',
         boxShadow: active ? `0 4px 20px ${color}22` : 'none',
       }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = color + '88'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = active ? color + '66' : 'var(--border)'; e.currentTarget.style.transform = active ? 'translateY(-1px)' : 'none' }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = color + '55'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 4px 16px ${color}18` }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = active ? color + '44' : 'var(--border)'; e.currentTarget.style.transform = active ? 'translateY(-1px)' : 'none'; e.currentTarget.style.boxShadow = active ? `0 4px 20px ${color}18` : 'none' }}
     >
       <div style={{
         position: 'absolute', top: 0, right: 0,

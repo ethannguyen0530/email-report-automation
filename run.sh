@@ -36,6 +36,7 @@ exec python3 -m gunicorn \
     dashboard.app:app \
     --bind 0.0.0.0:5001 \
     --workers 1 \
+    --threads 4 \
     --timeout 120 \
     --access-logfile "$ROOT/logs/access.log" \
     --error-logfile "$ROOT/logs/error.log" \
