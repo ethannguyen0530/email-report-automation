@@ -159,15 +159,6 @@ class ReportService:
     </div>
   </div>
 
-  <!-- Project Notes -->
-  <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin-bottom:28px">
-    <div style="padding:18px 24px 14px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px">
-      <div style="width:3px;height:16px;background:#7c3aed;border-radius:99px"></div>
-      <h2 style="font-size:13px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:0.05em">Project Milestones & Updates</h2>
-    </div>
-    <div style="padding:16px 24px">{notes_html}</div>
-  </div>
-
   <!-- Projects Table -->
   <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin-bottom:28px">
     <div style="padding:18px 24px 14px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px">
