@@ -1,335 +1,322 @@
 # Repo Coverage & Open Questions
 
-**Project:** Email Report Automation System
-**Last Updated:** June 22, 2026
-**Author:** Ethan Nguyen
+**Project:** Email Report Automation System  
+**Last Updated:** June 22, 2026  
+**Author:** Ethan Nguyen  
 **Repo:** github.com/ethannguyen0530/email-report-automation
 
 ---
 
-## What This Repo WILL Do — MVP Complete ✅
+## What This Repo Does — MVP Complete ✅
 
-### ✅ Gmail Integration (Real, OAuth2)
+### ✅ Gmail Integration (OAuth2)
 
-- **OAuth2 authentication** to a Google account via `credentials.json` + `token.pickle`
-- Scans Gmail for emails from program managers and delivery leads
-- Configurable search criteria (keyword, sender, label, date range) in `.env`
-- Retrieves full email body + metadata (from, subject, date, thread ID)
+- OAuth2 authentication via `credentials.json` + `token.pickle` (browser prompt on first run, silent after)
+- Scans Gmail for emails using a configurable search query (`GMAIL_QUERY` in `.env`)
+- Configurable result limit (`GMAIL_MAX_RESULTS`)
+- Recursive multipart body extraction — handles nested `multipart/alternative` and `multipart/mixed` structures; falls back from HTML to plain text
 - Deduplication: skips emails already stored by `gmail_id`
-- Stores raw emails in SQLite `emails` table for audit trail
+- Stores raw emails in SQLite `emails` table with sender, subject, body, received timestamp, processed flag
 
-### ✅ AI-Powered Data Extraction (OpenAI GPT)
+### ✅ AI-Powered Data Extraction (OpenAI GPT-3.5)
 
-- Each email is sent to GPT (model configurable in `.env`) with a structured prompt
-- GPT extracts per email:
+- Each email body (up to 3000 chars) sent to GPT with a structured prompt
+- Extracts per email:
   - **Customer name**
   - **Project name**
-  - **Status** (On Track / At Risk / Delayed / Completed / In Progress)
-  - **Progress %** (0–100)
-  - **Milestone** (what was completed)
-  - **Blocker** (what is blocking progress)
-  - **Owner name** (who sent the update)
+  - **Status** — On Track / At Risk / Delayed / Completed / In Progress
+  - **Progress %** — 0–100
+  - **Milestone** — what was completed
+  - **Blocker** — what is blocking progress
+  - **Owner** — who sent the update
+  - **Summary** — one-sentence current status
 - **Regex fallback** if GPT fails or returns malformed JSON
-- Handles multiple projects per email
-- Results stored in `projects`, `customers`, and `updates` tables
+- Results stored in `projects`, `customers`, `updates` tables
+- Update summary stored as: `extracted.get('summary') or extracted.get('milestone') or email subject`
 
-### ✅ Structured SQLite Database
+### ✅ SQLite Database (4 tables)
 
-Four tables:
 | Table | Contents |
 |---|---|
 | `customers` | Unique customer names |
-| `projects` | Project per customer with status, progress, owner |
-| `updates` | Individual update records linked to projects |
-| `emails` | Raw email archive with processed flag |
+| `projects` | Project per customer — status, progress, owner, created_at |
+| `updates` | Update records — summary, milestone, blocker, owner, date |
+| `emails` | Raw email archive — gmail_id (unique), sender, subject, body, received_at, processed flag |
 
-- `get_all_projects()` — returns all projects with last update timestamp via LEFT JOIN
-- `get_executive_summary()` — aggregates metrics, accomplishments, blockers, project notes
-- `mark_email_processed()` — tracks which emails have been processed
+Key queries:
+- `get_all_projects()` — LEFT JOIN on updates for `MAX(created_at)` as `last_updated`
+- `get_executive_summary()` — aggregates metrics, accomplishments (deduped, no Unknown/TBD), blockers (deduped), project notes (one per project, milestone > blocker > summary priority)
+- `mark_email_processed()` — sets `processed=1` and `created_at` (used as processed timestamp)
 
-### ✅ React Dashboard (Vite, port 3000)
+### ✅ React Dashboard (Vite, served by Flask in production)
 
-**Overview Page (`/dashboard`)**
+**Overview Page**
 - 5 clickable metric cards: Total, On Track, At Risk, Delayed, Completed
   - Clicking any card **filters the projects table** to that status
-  - Active card glows with color accent; "Clear filter" button resets
-- Recent Accomplishments panel — pulled from real update summaries
-- Open Blockers panel — deduplicated, real blocker text only
-- Projects table with columns: Project, Customer, Status (inline editable), Progress bar, Owner, Last Updated
-- **Red flag alerts** (⚑): projects with no update in 7+ days highlighted in red — Completed projects exempt
-- "X projects need attention" badge in header when stale projects exist
+  - Active card shows glow + bottom accent bar; "Clear filter" button resets
+  - Filter persists until cleared or a different card is clicked
+- Projects table columns: Project, Customer, Status (inline editable), Progress bar, Owner, Last Updated
+- **Red flag alerts (⚑):** projects with no update in 7+ days highlighted in red — Completed projects are exempt
+- "X projects need attention" badge in table header when stale projects exist
+- Recent Accomplishments panel — real data from updates, deduped, Unknown/TBD filtered out
+- Open Blockers panel — real data, deduped
 
-**Emails Page (`/emails`)**
+**Emails Page**
 - Inbox-style list of all scanned emails
-- Per email: subject, sender, received timestamp, processed timestamp, status badge (processed / pending)
-- Click to open detail pane: full email body, all timestamps
+- Per email: subject, sender, received timestamp, processed timestamp (green when processed), status badge
+- Click email to open detail pane with full body and all timestamps
 - Split layout when detail pane is open
 
-**Executive Report Page (`/report`)**
-- Renders the full HTML executive report live in an iframe
-- Professional design: gradient header, pill status badges, inline progress bars, card layout
-- "Send via Email + Slack" button — triggers `/api/send-report` endpoint
+**Executive Report Page**
+- Renders the full HTML executive report live in an iframe (fetches `/api/report`)
+- Report sections: gradient header, metric cards, Recent Accomplishments, Open Blockers, All Projects table
+- "Send via Email + Slack" button — calls `POST /api/send-report`, shows ✓ Sent or error
 
-**Files Page (`/uploads`)**
-- Drag-and-drop file upload zone
-- Supported types: PDF, TXT, DOC, DOCX, CSV, PNG, JPG, GIF, WEBP
-- Image preview on hover
-- File size display, file type icons
+**Files Page**
+- Drag-and-drop upload zone
+- Supported: PDF, TXT, DOC, DOCX, CSV, PNG, JPG, GIF, WEBP
+- Image preview on hover; file size and type display
 - Files stored in `uploads/` directory, served via Flask
 
 ### ✅ Flask REST API (port 5001)
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/summary` | Executive summary with projects, metrics, accomplishments, blockers, notes |
+| GET | `/api/summary` | Metrics, accomplishments, blockers, all projects |
 | GET | `/api/projects` | All projects as JSON |
-| GET | `/api/projects/:id` | Single project with full update history |
-| PATCH | `/api/projects/:id` | Update project status/progress/owner (inline edit) |
+| GET | `/api/projects/:id` | Single project + update history |
+| PATCH | `/api/projects/:id` | Update status / progress / owner |
 | GET | `/api/customers` | All customers |
 | GET | `/api/customers/:id` | Customer + their projects |
-| GET | `/api/emails` | All emails with processed timestamps |
+| GET | `/api/emails` | All emails with received and processed timestamps |
 | GET | `/api/report` | Executive report as rendered HTML |
-| POST | `/api/send-report` | Sends report via SMTP email + Slack |
-| POST | `/api/upload` | File upload endpoint |
+| POST | `/api/send-report` | Send report via SMTP + Slack |
+| POST | `/api/scan-now` | Trigger Gmail scan in background thread |
+| POST | `/api/upload` | Upload file |
 | GET | `/api/uploads/:filename` | Serve uploaded file |
 
-- CORS enabled for React dev proxy
-- Legacy HTML routes at `/html`, `/html/customer/:id`, `/html/project/:id`
+- CORS enabled (for React dev proxy on `:3000`)
+- Legacy HTML routes: `/html`, `/html/customer/:id`, `/html/project/:id`
 
 ### ✅ Executive Report Generation
 
-HTML report includes:
-- Dark gradient header with date/time and confidential label
-- 5 metric cards (Total, On Track, At Risk, Delayed, Completed)
-- Recent Accomplishments section (real data, deduped, no Unknown/TBD)
-- Open Blockers section (real data, deduped)
-- **Project Notes section** — most recent update summaries per project
-- Full Projects table with color-coded status pills and inline progress bars
-- Professional typography, clean white card layout
+HTML report sections:
+- Dark gradient header (indigo/purple) with confidential label, date, generated-at time
+- 5 metric cards (Total, On Track, At Risk, Delayed, Completed) with colored values
+- Recent Accomplishments — real summaries, deduped, no Unknown/TBD filler
+- Open Blockers — real blocker text, deduped
+- All Projects table — color-coded status pills, inline progress bars, owner column
+- Footer: "Confidential — For internal use only"
 
-Dual distribution:
-- Email via SMTP (Gmail or custom SMTP server) — HTML formatted
-- Slack via Bot token — Block Kit formatted
+Dual delivery:
+- SMTP email (HTML formatted) to `REPORT_RECIPIENTS`
+- Slack (Block Kit formatted) to `SLACK_CHANNEL`
 
 ### ✅ Inline Status Editing
 
 - Each project row has a `<StatusSelect>` dropdown
-- Selecting a new status fires `PATCH /api/projects/:id` immediately
-- Options: On Track, At Risk, Delayed, Completed, In Progress
-- No page reload required
+- Selecting a new status fires `PATCH /api/projects/:id` immediately — no page reload
 
-### ✅ One-Command Startup
+### ✅ Automatic Email Scanning (APScheduler)
 
-```bash
-bash ~/email-report-automation/start.sh
-```
+- `SCAN_INTERVAL_HOURS` in `.env` controls frequency (0 = disabled)
+- `BackgroundScheduler` starts when gunicorn imports `dashboard.app`
+- Guard against double-start in Flask debug reloader (`WERKZEUG_RUN_MAIN` check)
+- Also available on-demand via `POST /api/scan-now` or `python3 main.py` → option 2
 
-Starts both Flask (port 5001) and React (port 3000) in parallel background processes. Handles Node.js PATH injection for non-standard installs.
+### ✅ macOS Background Service (launchd)
+
+- `bash install_service.sh` — one command installs everything:
+  - Finds Python and npm dynamically
+  - Builds React frontend (`npm run build`)
+  - Installs pip deps
+  - Writes `~/Library/LaunchAgents/com.emailreport.plist`
+  - Starts service immediately (`launchctl load`)
+- `KeepAlive=true` — restarts on crash
+- `ThrottleInterval=10` — 10-second delay before restart (prevents spin loop)
+- Logs to `logs/server.log`, `logs/access.log`, `logs/error.log`
+- **No terminal needed at runtime** — close all terminal windows after setup
+
+### ✅ Production WSGI Server (gunicorn)
+
+- `python3 -m gunicorn dashboard.app:app --bind 127.0.0.1:5001 --workers 1 --timeout 120`
+- Single worker — safe for SQLite (no concurrent write conflicts)
+- Flask serves React build as static files — no Node process at runtime
 
 ### ✅ GitHub Deployment
 
 - Full repo at `github.com/ethannguyen0530/email-report-automation`
-- `requirements.txt` with all Python dependencies
-- `.env.example` with all required credential placeholders
-- `start.sh` one-command startup
-- Authenticated as `ethannguyen0530` via `gh` CLI
+- `requirements.txt` — all Python deps including gunicorn, apscheduler
+- `.env.example` — clean template with all required keys
+- `install_service.sh` — one-command setup for any Mac
+- `REPO_COVERAGE_AND_QUESTIONS.md` — this file
 
 ---
 
 ## What's NOT in This Repo Yet ❌
 
-| Feature | Why Excluded | Add Later? |
+| Feature | Status | Priority |
 |---|---|---|
-| **Automatic Scheduling** | Need to confirm frequency preference | Yes — APScheduler or cron, ~30 min to add |
-| **Slack Bot Token** | `.env` var exists, no token provided yet | Yes — needs workspace + token from Slack API |
-| **SMTP Email Credentials** | `.env` var exists, no credentials yet | Yes — Gmail app password or SMTP server |
-| **OpenAI API Key** | Required for real extraction; user must provide | Yes — add to `.env` as `OPENAI_API_KEY` |
-| **Cloud Deployment** | Local/GitHub only for MVP | Yes — GCP Cloud Run, Railway, or Render (~2h) |
-| **User Authentication** | No login system for dashboard | Yes — Flask-Login or JWT if multi-user needed |
-| **Scheduled Report Sending** | Manual "Send" button only | Yes — APScheduler, daily/weekly trigger |
-| **Multi-Gmail Account** | Single OAuth account per deployment | Yes — can loop multiple `credentials.json` files |
-| **PostgreSQL Option** | SQLite works for MVP, not for scale | Yes — swap `DatabaseManager` driver (~4h) |
-| **Real-time Dashboard Updates** | Page requires manual refresh | Yes — polling via `setInterval` or WebSocket |
-| **Charts & Visualizations** | Table/card only, no charts | Yes — Recharts or Chart.js integration |
-| **Email Search Config UI** | Hardcoded in `.env`, no UI to change | Yes — Settings page |
-| **Test Suite** | No automated tests | Yes — pytest for API, Vitest for React |
-| **Production WSGI Server** | Dev Flask only (`app.run`) | Yes — Gunicorn behind nginx for production |
-| **Duplicate Project Detection** | GPT may create near-duplicate project names | Yes — fuzzy match on project names |
-| **Email Search Criteria** | Currently broad, may pull irrelevant emails | Needs tuning — sender filters, subject keywords |
-| **Data Validation Layer** | Trusts GPT extraction output | Yes — validate fields before DB insert |
-| **Pagination** | Projects/emails tables show all rows | Yes — add server-side pagination if >100 rows |
-| **Dark Mode for Report PDF** | Report HTML is light-themed only | Nice-to-have |
-| **Apollo/Hunter API integration** | Not relevant for this tool | No |
+| **Scheduled report delivery** | Manual "Send" button only — no automatic daily/weekly send | High — add `APScheduler` job for `run_send_report()` |
+| **Real-time dashboard updates** | Manual page refresh required | Medium — add `setInterval` polling or WebSocket |
+| **Cloud deployment** | Local only — dashboard not accessible from outside your Mac | High if others need access |
+| **User authentication** | No login — anyone on same network can access dashboard | High if dashboard is public-facing |
+| **OpenAI API key** | `.env` var exists, no key set yet | Required for AI extraction to work |
+| **Slack bot token** | `.env` var exists, no token set yet | Required for Slack delivery |
+| **SMTP credentials** | `.env` vars exist, not configured yet | Required for email delivery |
+| **Email search tuning** | `GMAIL_QUERY` is a broad default — may pull irrelevant emails | High — needs tuning to real senders/keywords |
+| **Duplicate project detection** | GPT may extract "Cigna Migration" and "Cigna migration" as different | Medium — fuzzy match on project + customer |
+| **Multi-Gmail account support** | Single OAuth account per deployment | Low |
+| **PostgreSQL option** | SQLite fine for 1 user / <10k rows; not for concurrent multi-user | Low unless scaling |
+| **Charts / visualizations** | Table and card layout only — no trend charts | Low |
+| **Test suite** | No automated tests (unit or integration) | Medium for production confidence |
+| **Pagination** | All rows loaded at once — fine for <100 projects | Low |
+| **Settings UI** | Email query and scan interval configurable only via `.env` | Low |
+| **Data validation layer** | Trusts GPT extraction — no field-level validation before DB insert | Medium |
 
 ---
 
-## Critical Questions — MUST Answer Before Production Build
+## Critical Questions — Answer Before Production
 
-### 1. Gmail Setup
+### 1. Gmail
 
-- ☐ **Which Gmail account** should the system scan? (Your personal Gmail? A shared team inbox? A service account?)
-- ☐ **Email search criteria** — how to identify project update emails?
-  - By sender domain? (e.g., `@company.com`)
-  - By specific sender addresses? (list all program managers / delivery leads)
-  - By Gmail label? (e.g., a "Project Updates" label)
-  - By subject keywords? (e.g., "status update", "weekly report", "project sync")
-- ☐ **How far back** should the initial scan go? (Last 7 days? 30 days? All time?)
-- ☐ **Ongoing scan frequency** — every 1 hour? Every morning at 8am? Manual only?
-- ☐ **Scan mode** — read-only OK? Or should the system label/archive processed emails?
+- ☐ **Which Gmail account** scans project update emails? (Personal? Shared team inbox?)
+- ☐ **Search criteria** — how to identify the right emails?
+  - By sender domain? (e.g., `from:@autonomize.ai`)
+  - By specific senders? (list all program managers by email)
+  - By Gmail label applied manually or by a filter rule?
+  - By subject keywords? (e.g., `subject:"weekly update" OR subject:"project status"`)
+- ☐ **How far back** should the initial scan go? (7 days? 30 days? All time?)
+- ☐ **Ongoing frequency** — every 6 hours is currently configured; is that right?
+- ☐ **Read-only OK?** — system never modifies or labels emails, only reads
 
 ### 2. Report Distribution
 
-- ☐ **Who receives the executive report via email?**
-  - Exact recipient email addresses (give a list)
-  - Should the sender appear as you or a generic system address?
-- ☐ **Slack workspace and channel**
-  - Which workspace?
-  - Which channel? (`#project-updates`? `#leadership`? New channel?)
-  - What should the bot be named?
-- ☐ **Report frequency**
-  - Daily at a specific time? Weekly on a specific day?
-  - Manual trigger only (button in dashboard)?
-  - Both — scheduled + on-demand button?
-- ☐ **Report scope** — all projects? Or only active/at-risk projects?
+- ☐ **Exact email recipients** — who receives the executive report?
+- ☐ **Slack workspace and channel** — which workspace? Which channel?
+- ☐ **Report frequency** — automatic on a schedule, or manual button only?
+- ☐ **Report scope** — all projects, or only At Risk + Delayed?
 
-### 3. Credentials — All Required Before Production
+### 3. Credentials Needed
 
-| Credential | Where to Get It | Status |
+| Credential | How to Get | Current Status |
 |---|---|---|
-| `credentials.json` (Gmail OAuth2) | Google Cloud Console → APIs → Gmail API → OAuth credentials | ✅ Done |
-| `OPENAI_API_KEY` | platform.openai.com → API keys | ☐ Not set |
-| `SLACK_BOT_TOKEN` (xoxb-...) | api.slack.com → Your Apps → Bot Token | ☐ Not set |
-| `SLACK_CHANNEL` | Slack channel name (e.g., `#updates`) | ☐ Not set |
-| `SENDER_EMAIL` | Gmail or SMTP address that sends reports | ☐ Not set |
-| `SENDER_PASSWORD` | Gmail App Password (not your login password) | ☐ Not set |
-| `REPORT_RECIPIENTS` | Comma-separated email list | ☐ Not set |
+| `credentials.json` (Gmail OAuth2) | Google Cloud Console → Gmail API → OAuth client | ✅ File exists |
+| `OPENAI_API_KEY` | platform.openai.com → API Keys | ☐ Not set in .env |
+| `SLACK_BOT_TOKEN` | api.slack.com → Your Apps → Bot Token (xoxb-...) | ☐ Not set in .env |
+| `SLACK_CHANNEL` | Slack channel name | ☐ Not set in .env |
+| `SENDER_EMAIL` | Gmail address that sends reports | ☐ Not set in .env |
+| `SENDER_PASSWORD` | Gmail App Password | ☐ Not set in .env |
+| `REPORT_RECIPIENTS` | Comma-separated recipient list | ☐ Not set in .env |
 
-**How to get Gmail App Password:**
-1. Go to myaccount.google.com → Security → 2-Step Verification → App Passwords
-2. Generate a password for "Mail"
-3. Paste into `.env` as `SENDER_PASSWORD`
+**How to generate a Gmail App Password:**
+1. myaccount.google.com → Security → 2-Step Verification → App Passwords
+2. Name it anything → Generate
+3. Paste the 16-character password into `.env` as `SENDER_PASSWORD`
 
 ### 4. Data Extraction Quality
 
-- ☐ **Are these the right fields?**
-  Customer, Project, Status, Progress %, Milestone, Blocker, Owner — or are there additional fields needed (e.g., due date, priority, budget)?
-- ☐ **How should status be determined?**
-  - AI judgment from email language? (current approach)
-  - Explicit keywords only? ("status: on track")
-  - Manual override always wins? (current dashboard allows this)
-- ☐ **What makes a valid "blocker"?** The AI currently looks for blocking language. Does the team use specific terminology?
-- ☐ **Customer name standardization** — GPT may extract "Acme Corp", "ACME", "Acme" as three different customers. Do you need a canonical customer name list?
-- ☐ **OpenAI cost budget** — GPT-4 runs ~$0.01–0.05 per email. If scanning 100 emails/day, that's $1–5/day or $30–150/month. Is that acceptable? (Can switch to GPT-3.5 to reduce cost ~10x.)
+- ☐ **Are the 7 extracted fields correct?** (Customer, Project, Status, Progress %, Milestone, Blocker, Owner) — or are more needed (due date, priority, budget)?
+- ☐ **Customer name canonicalization** — GPT may extract "Cigna", "CIGNA Corp", "Cigna Health" as different customers. Is a canonical name list needed?
+- ☐ **OpenAI cost** — GPT-3.5 is ~$0.001–0.002 per email. At 50 emails/day that's ~$2–3/month. Acceptable?
+- ☐ **What defines a valid "blocker"?** The AI infers blocking language. Does your team use specific terms?
 
-### 5. Scheduling & Automation
+### 5. Scheduling
 
 - ☐ **Automatic report delivery?**
-  - Option A: Manual only — press "Send" in the dashboard
-  - Option B: Scheduled — system runs every morning at 8am, sends report automatically
-  - Option C: Both — scheduled background job + manual override button
-- ☐ **Email scan trigger?**
-  - Manual only (run `python3 main.py` then press 2)?
-  - Automatic on schedule (e.g., every 6 hours)?
-- ☐ **What happens when the machine is off?** If local, scheduled jobs don't run. Needs a cloud VM or service for always-on scheduling.
+  - Option A: Manual only (press Send in dashboard)
+  - Option B: Scheduled — system sends report at a fixed time (daily at 8am, weekly on Monday, etc.)
+  - Option C: Both — scheduled + on-demand button
+- ☐ **Email scan trigger?** Currently set to every 6 hours (`SCAN_INTERVAL_HOURS=6`). Is this right?
+- ☐ **Machine-off behavior** — if the MacBook is closed/off, no scans run. Is this acceptable or does this need cloud hosting?
 
-### 6. Scale & Reliability
+### 6. Deployment Environment
 
-- ☐ **How many emails per day** are expected? (10? 100? 1,000?)
-- ☐ **How many projects** will be tracked? (10? 50? 500?)
-- ☐ **Is SQLite acceptable long-term?**
-  - SQLite is fine for 1 user, <10,000 rows
-  - If multiple people need simultaneous access → PostgreSQL
-- ☐ **What happens if GPT extraction fails?** Currently uses regex fallback and creates an "Unknown" project. Is that acceptable?
-- ☐ **Data retention** — how long should email and update history be kept? Forever? 90 days?
+- ☐ **Who needs dashboard access?**
+  - Just you → `localhost:5001` is fine, no changes needed
+  - Others on same network → expose port, add IP restriction
+  - Remote stakeholders → needs cloud deployment + public URL + auth
+- ☐ **Cloud deployment needed?** Options: Railway, Render, GCP Cloud Run (~2–4h to set up, ~$5–20/month)
+- ☐ **Authentication needed?** If others access the dashboard, a login screen is required
 
-### 7. Deployment Environment
+### 7. Scale
 
-- ☐ **Where should this run in production?**
-  - Your laptop (free, but must be on and running)
-  - A cloud VM (GCP/AWS/Azure) — ~$10–30/month
-  - Platform-as-a-service (Railway, Render, Fly.io) — ~$5–20/month
-  - Company server/infrastructure — coordinate with IT
-- ☐ **Does the dashboard need to be accessible to others?** (Or just you?)
-  - If others need access → needs public URL + authentication
-  - If just you → localhost is fine
+- ☐ **How many emails per day?** (10? 100? 1,000?)
+- ☐ **How many projects total?** (10? 50? 500?)
+- ☐ **How long keep history?** All time? 90 days? 1 year?
+- ☐ **SQLite acceptable?** Fine for single user + <10k rows. Multiple simultaneous users → PostgreSQL
 
 ---
 
-## Answers (Fill These In Before Production)
+## Answers (Fill In Before Production)
 
 ### Gmail
 - Account to scan: `_________________________________`
-- Search criteria (senders/labels/keywords): `_________________________________`
-- Initial scan lookback period: `_________________________________`
-- Ongoing scan frequency: `_________________________________`
+- Search query: `_________________________________`
+- Initial lookback: `_________________________________`
+- Scan frequency (currently 6h): `_________________________________`
 
 ### Report Distribution
-- Email recipient(s): `_________________________________`
+- Email recipients: `_________________________________`
 - Slack workspace: `_________________________________`
 - Slack channel: `_________________________________`
-- Report frequency: `_________________________________`
+- Report schedule: `_________________________________`
 
-### Credentials Status
-- ☐ Gmail OAuth credentials ready? (`credentials.json` exists)
-- ☐ OpenAI API key set in `.env`?
-- ☐ Slack bot token ready?
-- ☐ Email SMTP configured (sender email + app password)?
-- ☐ Report recipient list configured?
-
-### Data & Extraction
-- Additional fields needed beyond the 7 current ones: `_________________________________`
-- Customer name canonical list needed? `_________________________________`
-- OpenAI model preference (gpt-4o vs gpt-3.5-turbo for cost): `_________________________________`
+### Credentials Checklist
+- ☐ `credentials.json` in project root
+- ☐ `OPENAI_API_KEY` set in `.env`
+- ☐ `SLACK_BOT_TOKEN` set in `.env`
+- ☐ `SLACK_CHANNEL` set in `.env`
+- ☐ `SENDER_EMAIL` + `SENDER_PASSWORD` set in `.env`
+- ☐ `REPORT_RECIPIENTS` set in `.env`
+- ☐ `GMAIL_QUERY` tuned to real senders/keywords
 
 ### Deployment
-- ☐ Local laptop only
-- ☐ Cloud VM (specify provider): `_________________________________`
-- ☐ PaaS platform: `_________________________________`
+- ☐ Local laptop only (current)
+- ☐ Cloud VM — provider: `_________________________________`
+- ☐ PaaS — platform: `_________________________________`
 
 ---
 
-## Success Criteria — How You'll Know It's Done
+## Success Criteria
 
-### MVP (Current State — Functionally Complete)
-- ✅ Gmail OAuth2 connects and scans real emails
-- ✅ GPT extracts customer/project/status/progress/milestone/blocker/owner from emails
+### MVP — Functionally Complete ✅
+- ✅ Gmail OAuth2 connects and scans emails
+- ✅ GPT extracts structured data from email body
 - ✅ Dashboard loads with real extracted data (not mock)
-- ✅ Metric cards filter the projects table when clicked
-- ✅ Red flag alerts highlight stale projects (>7 days, not Completed)
-- ✅ Status can be changed inline on the dashboard
-- ✅ Files can be uploaded via drag-and-drop
-- ✅ Emails are viewable with processed timestamps
-- ✅ Executive report renders with real data
-- ✅ Report HTML is professional and formatted correctly
-- ✅ All code in GitHub repo (`github.com/ethannguyen0530/email-report-automation`)
-- ✅ `start.sh` starts both servers with one command
+- ✅ Metric cards filter projects table by status when clicked
+- ✅ Red flag alerts highlight stale projects (>7 days, excludes Completed)
+- ✅ Status editable inline per project row
+- ✅ Last Updated column shows human-readable relative timestamp
+- ✅ Files uploadable via drag-and-drop
+- ✅ Emails viewable with received and processed timestamps
+- ✅ Executive report renders with real data — professional layout
+- ✅ All code in GitHub (`github.com/ethannguyen0530/email-report-automation`)
+- ✅ `install_service.sh` installs service with one command
+- ✅ Service auto-starts on login, restarts on crash, needs no open terminal
+- ✅ Auto email scan every 6 hours via APScheduler
 
-### Production Ready (Remaining Gaps)
-- ☐ Email report sends to real recipients via SMTP
-- ☐ Slack message delivers to correct channel
-- ☐ Email search criteria tuned to only pull relevant project update emails
-- ☐ GPT extraction quality validated on at least 20 real emails (no Unknown/TBD spam)
-- ☐ Automatic scheduling configured (if required)
+### Production Ready — Remaining Gaps
 - ☐ All credentials filled in `.env` (OpenAI, Slack, SMTP)
-- ☐ System tested end-to-end: email arrives → extracted → appears on dashboard → report sent
-- ☐ Deployed to environment accessible to stakeholders (if needed)
-- ☐ `.env.example` updated with all required keys
+- ☐ `GMAIL_QUERY` tuned to target only real project update emails
+- ☐ Extraction quality validated on 20+ real emails (no Unknown/TBD spam)
+- ☐ Report sends successfully to real email recipients via SMTP
+- ☐ Slack message delivers to correct workspace and channel
+- ☐ End-to-end test: email arrives → extracted → appears on dashboard → report sent
+- ☐ Deployment decision made (local vs cloud) based on who needs access
 
 ---
 
-## Next Steps — Ordered by Priority
+## Next Steps — In Priority Order
 
-1. **Answer the critical questions above** — especially Gmail search criteria and report recipients ← DO THIS FIRST
-2. **Set credentials in `.env`**:
-   - `OPENAI_API_KEY` — required for extraction to work
-   - `SLACK_BOT_TOKEN` + `SLACK_CHANNEL` — required for Slack delivery
-   - `SENDER_EMAIL` + `SENDER_PASSWORD` + `REPORT_RECIPIENTS` — required for email delivery
-3. **Tune email search criteria** — update `GMAIL_SEARCH_QUERY` in `.env` to target only project update emails from known senders
-4. **Validate extraction quality** — run `python3 main.py` → option 2 on 20–30 real emails, review the dashboard for bad extractions, adjust GPT prompt if needed
-5. **Test full send pipeline** — click "Send via Email + Slack" in the Report tab, verify delivery
-6. **Add automatic scheduling** (if required) — ~30 min with APScheduler
-7. **Cloud deployment** (if required) — ~2–4 hours to containerize and deploy to Railway or GCP Cloud Run
-8. **Add user auth** (if others need dashboard access) — ~4 hours with Flask-Login
+1. **Answer the critical questions above** — Gmail criteria and report recipients first
+2. **Set credentials in `.env`** — OpenAI, Slack, SMTP
+3. **Tune `GMAIL_QUERY`** — restrict to real project update senders
+4. **Authorize Gmail** — `python3 main.py` → option 2 → browser auth flow → `token.pickle` saved
+5. **Validate extraction quality** — run on 20–30 real emails, check dashboard for bad data
+6. **Test report delivery** — click "Send via Email + Slack", confirm receipt
+7. **Decide deployment** — if others need access, deploy to cloud
+8. **Add scheduled report send** (if required) — ~30 min with APScheduler
 
 ---
 
@@ -337,41 +324,47 @@ Starts both Flask (port 5001) and React (port 3000) in parallel background proce
 
 ```
 email-report-automation/
-├── main.py                    # CLI entry point — scan emails, view menu
-├── config.py                  # Loads all .env variables
-├── start.sh                   # One-command startup (Flask + React)
-├── requirements.txt           # Python dependencies
-├── .env                       # Credentials (not committed)
-├── .env.example               # Template for .env
+├── main.py                     CLI entry point — scan, report, seed
+├── config.py                   .env variable loading with defaults
+├── start.sh                    Dev mode (Flask dev + Vite HMR on :3000)
+├── run.sh                      Production startup (gunicorn on :5001)
+├── install_service.sh          macOS launchd service installer
+├── requirements.txt            Python deps (gunicorn, apscheduler, flask, openai, etc.)
+├── credentials.json            Gmail OAuth creds (not committed to git)
+├── token.pickle                Gmail access token (auto-created on first auth, not committed)
+├── .env                        Credentials (not committed)
+├── .env.example                Template for .env
 │
-├── database/
-│   └── schema.py              # DatabaseManager — all SQL queries
+├── database/schema.py          DatabaseManager — init, queries, inserts
 │
 ├── services/
-│   ├── gmail_service.py       # Gmail OAuth2, email fetch
-│   ├── extraction_service.py  # GPT + regex extraction
-│   ├── report_service.py      # HTML report generation + SMTP send
-│   └── slack_service.py       # Slack Block Kit delivery
+│   ├── gmail_service.py        OAuth2 auth + recursive email body extraction
+│   ├── extraction_service.py   GPT prompt + regex fallback
+│   ├── report_service.py       HTML report generation + SMTP delivery
+│   └── slack_service.py        Slack Block Kit formatting + delivery
 │
-├── dashboard/
-│   └── app.py                 # Flask REST API (all /api/* routes)
+├── dashboard/app.py            Flask app — all routes, APScheduler, React serving
 │
-├── frontend/                  # React + Vite (port 3000)
+├── frontend/
 │   ├── src/
-│   │   ├── App.jsx            # Router + layout
-│   │   ├── components/
-│   │   │   ├── Sidebar.jsx    # Nav: Overview, Emails, Report, Files
-│   │   │   ├── MetricCard.jsx # Clickable stat card with filter state
-│   │   │   ├── StatusSelect.jsx # Inline status dropdown (PATCH)
-│   │   │   └── ProgressBar.jsx
-│   │   └── pages/
-│   │       ├── Dashboard.jsx  # Overview with filters + red flags
-│   │       ├── Emails.jsx     # Inbox view with timestamps
-│   │       ├── Report.jsx     # Report preview + send button
-│   │       ├── Uploads.jsx    # Drag-and-drop file upload
-│   │       ├── ProjectDetail.jsx
-│   │       └── CustomerDetail.jsx
-│   └── vite.config.js         # Proxies /api to localhost:5001
+│   │   ├── App.jsx             Page router
+│   │   ├── pages/
+│   │   │   ├── Dashboard.jsx   Overview — filters, stale flags, inline edit
+│   │   │   ├── Emails.jsx      Inbox with timestamps
+│   │   │   ├── Report.jsx      Report iframe + send button
+│   │   │   └── Uploads.jsx     Drag-and-drop upload
+│   │   └── components/
+│   │       ├── Sidebar.jsx     Navigation
+│   │       ├── MetricCard.jsx  Clickable stat card
+│   │       ├── StatusSelect.jsx Inline dropdown (PATCH)
+│   │       └── StatusBadge.jsx Color-coded pill
+│   ├── dist/                   Built React app (served by Flask)
+│   └── vite.config.js          Proxies /api/* to :5001 in dev
 │
-└── uploads/                   # Uploaded files storage
+├── logs/
+│   ├── server.log              Combined stdout/stderr
+│   ├── access.log              HTTP access log
+│   └── error.log               gunicorn error log
+│
+└── uploads/                    Uploaded files
 ```

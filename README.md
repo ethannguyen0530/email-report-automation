@@ -1,28 +1,27 @@
 # Email Report Automation
 
-Scans Gmail from program managers and delivery leads, extracts project details via AI, consolidates into a live executive dashboard and sends reports via email + Slack.
+Scans Gmail from program managers and delivery leads, extracts project details via AI, and consolidates everything into a live executive dashboard with one-click report delivery via email and Slack.
 
-**Dashboard:** `http://localhost:5001` (after setup)
+**Dashboard:** `http://localhost:5001`
 **Repo:** `github.com/ethannguyen0530/email-report-automation`
 
 ---
 
 ## What It Does
 
-- **Gmail scanning** — OAuth2, fetches emails matching your search criteria
-- **AI extraction** — GPT pulls customer, project, status, progress %, milestone, blocker, owner from each email
-- **React dashboard** — Metric cards (click to filter), inline status editing, red-flag alerts for stale projects, email inbox, file uploads
-- **Executive report** — Professional HTML report with accomplishments, blockers, full project table — send to email + Slack in one click
-- **Always-on** — Runs as a macOS background service, auto-starts on login, no terminal needed
+- **Gmail scanning** — OAuth2, reads emails matching a configurable search query
+- **AI extraction** — GPT-3.5 extracts customer, project, status, progress %, milestone, blocker, and owner from each email; regex fallback if GPT fails
+- **React dashboard** — clickable metric cards that filter the projects table, inline status editing, red-flag alerts (⚑) for projects not updated in 7+ days, email inbox with timestamps, drag-and-drop file upload
+- **Executive report** — professional HTML report (gradient header, color-coded status pills, progress bars) with one-click delivery to email + Slack
+- **Always-on service** — runs as a macOS background service via launchd; auto-starts on login, restarts on crash, no terminal needed; auto-scans Gmail every N hours if configured
 
 ---
 
-## Setup (First Time)
+## First-Time Setup
 
-### 1. Clone and install
+### 1. Install Python dependencies
 
 ```bash
-git clone https://github.com/ethannguyen0530/email-report-automation
 cd email-report-automation
 pip3 install -r requirements.txt
 ```
@@ -31,59 +30,58 @@ pip3 install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env with your credentials
+# Edit .env and fill in your credentials (see table below)
 ```
 
-| Variable | How to get it |
-|---|---|
-| `OPENAI_API_KEY` | platform.openai.com → API keys |
-| `SLACK_BOT_TOKEN` | api.slack.com → Your Apps → Bot Token (xoxb-...) |
-| `SLACK_CHANNEL` | e.g. `#project-updates` |
-| `SENDER_EMAIL` | Gmail address that sends reports |
-| `SENDER_PASSWORD` | Gmail App Password (not your login password) |
-| `REPORT_RECIPIENTS` | Comma-separated, e.g. `boss@company.com,you@company.com` |
-| `GMAIL_QUERY` | Search filter, e.g. `from:@company.com subject:update` |
+| Variable | What it is | How to get it |
+|---|---|---|
+| `OPENAI_API_KEY` | AI extraction | platform.openai.com → API Keys |
+| `SLACK_BOT_TOKEN` | Slack delivery | api.slack.com → Your Apps → Bot Token (starts with `xoxb-`) |
+| `SLACK_CHANNEL` | Slack channel | e.g. `#project-updates` |
+| `SENDER_EMAIL` | Gmail that sends reports | Your Gmail address |
+| `SENDER_PASSWORD` | Gmail App Password | myaccount.google.com → Security → App Passwords → generate for Mail |
+| `REPORT_RECIPIENTS` | Who gets the email report | Comma-separated: `boss@co.com,you@co.com` |
+| `GMAIL_QUERY` | Which emails to scan | e.g. `from:@yourcompany.com subject:update` |
+| `SCAN_INTERVAL_HOURS` | Auto-scan frequency | `6` = every 6 hours; `0` = manual only |
 
-**Gmail OAuth credentials (`credentials.json`):**
+**Gmail OAuth setup (`credentials.json`):**
 1. Google Cloud Console → APIs & Services → Enable Gmail API
-2. Create OAuth2 credentials (Desktop app) → Download → save as `credentials.json` in project root
-3. Set `USE_MOCK_DATA=False` in `.env`
-4. First run opens a browser to authorize — after that, token is saved automatically
+2. Credentials → Create OAuth2 client (Desktop app) → Download JSON
+3. Save as `credentials.json` in the project root
+4. Set `USE_MOCK_DATA=False` in `.env`
+5. First run opens a browser to authorize — token is saved as `token.pickle` automatically
 
-**Gmail App Password (for SMTP sending):**
-1. myaccount.google.com → Security → 2-Step Verification → App Passwords
-2. Generate for "Mail" → paste as `SENDER_PASSWORD`
-
-### 3. Install as a permanent background service
+### 3. Install as a permanent background service (macOS)
 
 ```bash
 bash install_service.sh
 ```
 
-Builds the frontend, installs gunicorn, and registers a launchd service that starts automatically on every login and restarts on crash. No terminal needed.
+This does everything: installs pip deps, builds the React frontend, writes a launchd plist, and starts the service. After this you never need to run anything manually again.
 
-Open **http://localhost:5001** — dashboard is live.
+Visit **http://localhost:5001** — dashboard is live.
 
 ---
 
 ## Daily Use
 
-Visit **http://localhost:5001**. Everything runs automatically.
+Open `http://localhost:5001`. Everything else runs automatically.
 
-**Scan emails manually:**
+**Manually trigger an email scan:**
 ```bash
-python3 main.py   # select option 2
+python3 main.py    # select option 2
 ```
 
-**Enable automatic scanning** — set in `.env`:
-```
-SCAN_INTERVAL_HOURS=6
-```
-
-**After any `.env` or code change, restart the service:**
+**Restart the service** (required after `.env` or code changes):
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.emailreport.plist && \
 launchctl load ~/Library/LaunchAgents/com.emailreport.plist
+```
+
+**Stop / start:**
+```bash
+launchctl unload ~/Library/LaunchAgents/com.emailreport.plist   # stop
+launchctl load ~/Library/LaunchAgents/com.emailreport.plist     # start
 ```
 
 **View logs:**
@@ -97,56 +95,100 @@ tail -f ~/email-report-automation/logs/server.log
 
 | Page | What it shows |
 |---|---|
-| Overview | Metric cards (click to filter by status), all projects with last-updated timestamps, red flags for stale projects, accomplishments, blockers |
-| Emails | Inbox view of all scanned emails with received and processed timestamps |
-| Report | Live executive report preview + Send via Email + Slack button |
-| Files | Drag-and-drop file upload |
+| **Overview** | 5 metric cards (click any to filter the table by status), all projects with Last Updated column, ⚑ red flag on projects not updated in 7+ days, Recent Accomplishments panel, Open Blockers panel |
+| **Emails** | Inbox of all scanned emails — subject, sender, received timestamp, processed timestamp, full body on click |
+| **Report** | Live preview of the executive HTML report + "Send via Email + Slack" button |
+| **Files** | Drag-and-drop file upload (PDF, DOC, images, CSV) stored in `uploads/` |
+
+---
+
+## API Reference
+
+All endpoints at `http://localhost:5001/api/`
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/summary` | Full executive summary — metrics, accomplishments, blockers, all projects |
+| GET | `/api/projects` | All projects as JSON |
+| GET | `/api/projects/:id` | Single project + full update history |
+| PATCH | `/api/projects/:id` | Update status / progress / owner inline |
+| GET | `/api/customers` | All customers |
+| GET | `/api/customers/:id` | Customer + their projects |
+| GET | `/api/emails` | All scanned emails with timestamps |
+| GET | `/api/report` | Executive report as rendered HTML |
+| POST | `/api/send-report` | Send report via SMTP email + Slack |
+| POST | `/api/scan-now` | Manually trigger a Gmail scan (runs in background) |
+| POST | `/api/upload` | Upload a file |
+| GET | `/api/uploads/:filename` | Serve an uploaded file |
 
 ---
 
 ## Architecture
 
 ```
-Gmail API → GmailService (OAuth2)
-                ↓
-        ExtractionService (GPT-3.5)
-                ↓
-          SQLite Database
-                ↓
-    Flask REST API (port 5001)          ← APScheduler (auto email scan)
-    React Frontend (served by Flask)
-                ↓
-    ReportService → SMTP Email + Slack
+Gmail API ──► GmailService (OAuth2 + recursive body extraction)
+                    │
+                    ▼
+         ExtractionService (GPT-3.5 + regex fallback)
+                    │
+                    ▼
+            SQLite Database (projects.db)
+                    │
+          ┌─────────┴──────────┐
+          ▼                    ▼
+  Flask REST API          APScheduler
+  (port 5001)         (auto email scan)
+          │
+    ┌─────┴────────────────────┐
+    ▼                          ▼
+React Frontend           ReportService
+(served as static)    (SMTP + Slack Block Kit)
 ```
 
-### Key Files
+**Production stack:** gunicorn (1 worker, SQLite-safe) → Flask → React build  
+**Dev stack:** Flask dev server + Vite HMR (`bash start.sh`)
+
+### File Structure
 
 ```
 email-report-automation/
-├── main.py                     CLI — manual scan, report, seed
-├── config.py                   Loads all .env variables
-├── start.sh                    Dev mode (Flask dev + Vite HMR)
-├── run.sh                      Production (gunicorn)
-├── install_service.sh          macOS launchd installer
-├── REPO_COVERAGE_AND_QUESTIONS.md  Full feature inventory + open questions
+├── main.py                     CLI — manual scan, seed data, view menu
+├── config.py                   All .env variable loading with defaults
+├── start.sh                    Dev mode: Flask + Vite HMR on :3000
+├── run.sh                      Production: gunicorn on :5001
+├── install_service.sh          One-command macOS service installer (launchd)
+├── requirements.txt
+├── credentials.json            Gmail OAuth credentials (not committed)
+├── .env                        Your credentials (not committed)
+├── .env.example                Credential template
+├── REPO_COVERAGE_AND_QUESTIONS.md  Full gap analysis + open questions
 │
-├── database/schema.py          All SQL queries and DB management
+├── database/schema.py          DatabaseManager — all SQL (init, queries, inserts)
+│
 ├── services/
-│   ├── gmail_service.py        OAuth2 + recursive multipart body extraction
-│   ├── extraction_service.py   GPT extraction with regex fallback
-│   ├── report_service.py       HTML report + SMTP delivery
+│   ├── gmail_service.py        OAuth2 + recursive multipart email body extraction
+│   ├── extraction_service.py   GPT prompt + regex fallback → structured dict
+│   ├── report_service.py       HTML report generation + SMTP email delivery
 │   └── slack_service.py        Slack Block Kit formatting + delivery
-├── dashboard/app.py            Flask API, scheduler, React static serving
 │
-└── frontend/src/
-    ├── pages/Dashboard.jsx     Overview — filters, red flags, inline edit
-    ├── pages/Emails.jsx        Inbox with timestamps
-    ├── pages/Report.jsx        Report preview + send button
-    ├── pages/Uploads.jsx       Drag-and-drop upload
-    └── components/
-        ├── MetricCard.jsx      Clickable stat card with filter state
-        ├── StatusSelect.jsx    Inline status dropdown (PATCH to API)
-        └── StatusBadge.jsx     Color-coded status pill
+├── dashboard/app.py            Flask — all API routes, scheduler, React static serving
+│
+├── frontend/src/
+│   ├── App.jsx                 Page routing + layout
+│   ├── pages/
+│   │   ├── Dashboard.jsx       Overview (filters, red flags, inline edit)
+│   │   ├── Emails.jsx          Inbox with timestamps
+│   │   ├── Report.jsx          Report preview + send button
+│   │   └── Uploads.jsx         Drag-and-drop upload
+│   └── components/
+│       ├── Sidebar.jsx         Nav: Overview, Emails, Report, Files
+│       ├── MetricCard.jsx      Clickable stat card with filter state
+│       ├── StatusSelect.jsx    Inline status dropdown (fires PATCH)
+│       └── StatusBadge.jsx     Color-coded status pill
+│
+├── frontend/dist/              Built React app (served by Flask)
+├── logs/                       server.log, access.log, error.log
+└── uploads/                    Uploaded files
 ```
 
 ---
@@ -164,4 +206,4 @@ bash start.sh
 
 ## Pre-Production Checklist
 
-See `REPO_COVERAGE_AND_QUESTIONS.md` for the full gap analysis, critical questions, and success criteria before going live.
+See `REPO_COVERAGE_AND_QUESTIONS.md` for the full gap analysis, open questions, and success criteria before going live with real data.
