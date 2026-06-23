@@ -91,6 +91,33 @@ def api_project(project_id):
         ]
     })
 
+@app.route('/api/projects/<int:project_id>', methods=['PATCH'])
+def update_project(project_id):
+    data = request.get_json()
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    allowed = ['status', 'progress_percent', 'owner']
+    updates = {k: v for k, v in data.items() if k in allowed}
+    if not updates:
+        return jsonify({'error': 'No valid fields'}), 400
+    sets = ', '.join(f'{k} = ?' for k in updates)
+    cursor.execute(f'UPDATE projects SET {sets} WHERE id = ?', list(updates.values()) + [project_id])
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+@app.route('/api/emails')
+def api_emails():
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, gmail_id, sender, subject, body, received_at, processed FROM emails ORDER BY received_at DESC LIMIT 50')
+    rows = cursor.fetchall()
+    conn.close()
+    return jsonify([
+        {'id': r[0], 'gmail_id': r[1], 'sender': r[2], 'subject': r[3], 'body': r[4], 'date': r[5], 'processed': bool(r[6])}
+        for r in rows
+    ])
+
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:

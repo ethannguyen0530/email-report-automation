@@ -1,18 +1,30 @@
 import { useEffect, useState } from 'react'
 import MetricCard from '../components/MetricCard'
-import StatusBadge from '../components/StatusBadge'
+import StatusSelect from '../components/StatusSelect'
 import ProgressBar from '../components/ProgressBar'
 
 export default function Dashboard({ navigate }) {
   const [summary, setSummary] = useState(null)
   const [error, setError] = useState(null)
+  const [projects, setProjects] = useState([])
 
-  useEffect(() => {
+  const load = () => {
     fetch('/api/summary')
       .then(r => r.json())
-      .then(setSummary)
-      .catch(() => setError('Cannot connect to Flask API on port 5001.'))
-  }, [])
+      .then(data => {
+        setSummary(data)
+        setProjects(data.projects.map(p => ({
+          id: p[0], name: p[1], customer: p[2], status: p[3], progress: p[4], owner: p[5]
+        })))
+      })
+      .catch(() => setError('Cannot connect to Flask API on port 5001. Run: bash ~/email-report-automation/start.sh'))
+  }
+
+  useEffect(() => { load() }, [])
+
+  const updateStatus = (id, status) => {
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, status } : p))
+  }
 
   if (error) return <ErrorMsg msg={error} />
   if (!summary) return <Loading />
@@ -21,15 +33,11 @@ export default function Dashboard({ navigate }) {
 
   return (
     <div style={{ maxWidth: 1100 }}>
-      {/* Page header */}
       <div style={{ marginBottom: 36 }}>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>{date}</p>
-        <h1 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.5px', color: 'var(--text-primary)' }}>
-          Executive Overview
-        </h1>
+        <h1 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.5px' }}>Executive Overview</h1>
       </div>
 
-      {/* Metric cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 36 }}>
         <MetricCard value={summary.total_projects} label="Total"     color="#7c3aed" />
         <MetricCard value={summary.on_track}       label="On Track"  color="#22c55e" />
@@ -38,18 +46,16 @@ export default function Dashboard({ navigate }) {
         <MetricCard value={summary.completed}      label="Completed" color="#555" />
       </div>
 
-      {/* Two-col: accomplishments + blockers */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 28 }}>
         <Card title="Recent Accomplishments" accent="#22c55e">
           {summary.accomplishments.length === 0
-            ? <Empty>Nothing yet.</Empty>
+            ? <Empty>Nothing recorded yet.</Empty>
             : summary.accomplishments.map((a, i) => (
               <Row key={i} last={i === summary.accomplishments.length - 1}>
                 <span style={{ color: '#22c55e', fontSize: 14, marginTop: 1 }}>✓</span>
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{a}</span>
               </Row>
-            ))
-          }
+            ))}
         </Card>
 
         <Card title="Open Blockers" accent="#ef4444">
@@ -60,41 +66,36 @@ export default function Dashboard({ navigate }) {
                 <span style={{ color: '#ef4444', fontSize: 14, marginTop: 1 }}>!</span>
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{b}</span>
               </Row>
-            ))
-          }
+            ))}
         </Card>
       </div>
 
-      {/* Projects table */}
       <Card title="All Projects">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr>
               {['Project', 'Customer', 'Status', 'Progress', 'Owner'].map(h => (
-                <th key={h} style={{
-                  padding: '10px 16px', textAlign: 'left',
-                  color: 'var(--text-muted)', fontWeight: 600, fontSize: 11,
-                  textTransform: 'uppercase', letterSpacing: '0.08em',
-                  borderBottom: '1px solid var(--border)',
-                }}>
+                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid var(--border)' }}>
                   {h}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {summary.projects.map(([id, name, customer, status, progress, owner]) => (
-              <tr key={id}
-                style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.15s' }}
+            {projects.map(p => (
+              <tr key={p.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                onClick={() => navigate('project', id)}
-              >
-                <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--text-primary)' }}>{name}</td>
-                <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{customer || '—'}</td>
-                <td style={{ padding: '14px 16px' }}><StatusBadge status={status} /></td>
-                <td style={{ padding: '14px 16px', minWidth: 140 }}><ProgressBar value={progress} /></td>
-                <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{owner}</td>
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}
+                  onClick={() => navigate('project', p.id)}>
+                  {p.name}
+                </td>
+                <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{p.customer || '—'}</td>
+                <td style={{ padding: '14px 16px' }} onClick={e => e.stopPropagation()}>
+                  <StatusSelect projectId={p.id} value={p.status} onChange={s => updateStatus(p.id, s)} />
+                </td>
+                <td style={{ padding: '14px 16px', minWidth: 140 }}><ProgressBar value={p.progress} /></td>
+                <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{p.owner}</td>
               </tr>
             ))}
           </tbody>
@@ -106,19 +107,10 @@ export default function Dashboard({ navigate }) {
 
 function Card({ title, accent, children }) {
   return (
-    <div style={{
-      background: 'var(--bg-card)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)',
-      overflow: 'hidden',
-    }}>
-      <div style={{
-        padding: '16px 20px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', gap: 8,
-      }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
         {accent && <div style={{ width: 3, height: 14, borderRadius: 99, background: accent }} />}
-        <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.1px' }}>{title}</h2>
+        <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</h2>
       </div>
       <div style={{ padding: '4px 20px 12px' }}>{children}</div>
     </div>
@@ -127,11 +119,7 @@ function Card({ title, accent, children }) {
 
 function Row({ children, last }) {
   return (
-    <div style={{
-      display: 'flex', gap: 10, alignItems: 'flex-start',
-      padding: '10px 0',
-      borderBottom: last ? 'none' : '1px solid var(--border)',
-    }}>
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 0', borderBottom: last ? 'none' : '1px solid var(--border)' }}>
       {children}
     </div>
   )
