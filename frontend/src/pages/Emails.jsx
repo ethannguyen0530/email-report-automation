@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react'
 
+function fmtDateTime(str) {
+  if (!str) return '—'
+  try {
+    return new Date(str).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+  } catch { return str?.slice(0, 16) || '—' }
+}
+
 export default function Emails() {
   const [emails, setEmails] = useState([])
   const [selected, setSelected] = useState(null)
@@ -20,12 +27,12 @@ export default function Emails() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 1fr' : '1fr', gap: 20 }}>
-        {/* Email list */}
+        {/* List */}
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
-          {loading && <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Loading emails...</p>}
+          {loading && <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Loading...</p>}
           {!loading && emails.length === 0 && (
             <p style={{ padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>
-              No emails scanned yet. Run option 2 in main.py to fetch emails.
+              No emails scanned yet. Run option 2 in main.py first.
             </p>
           )}
           {emails.map((email, i) => (
@@ -44,46 +51,55 @@ export default function Emails() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                 <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {email.subject || '(no subject)'}
                   </p>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {email.sender}
-                  </p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{email.sender}</p>
+                  {/* Received + processed timestamps */}
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      Received: <span style={{ color: 'var(--text-secondary)' }}>{fmtDateTime(email.date)}</span>
+                    </span>
+                    {email.processed && (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        Processed: <span style={{ color: '#22c55e' }}>{fmtDateTime(email.processed_at)}</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatDate(email.date)}</span>
-                  <span style={{
-                    fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 99,
-                    background: email.processed ? 'rgba(34,197,94,0.1)' : 'rgba(245,158,11,0.1)',
-                    color: email.processed ? '#22c55e' : '#f59e0b',
-                    border: `1px solid ${email.processed ? 'rgba(34,197,94,0.2)' : 'rgba(245,158,11,0.2)'}`,
-                  }}>
-                    {email.processed ? 'processed' : 'pending'}
-                  </span>
-                </div>
+                <span style={{
+                  fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 99, flexShrink: 0, marginTop: 2,
+                  background: email.processed ? 'rgba(34,197,94,0.1)' : 'rgba(245,158,11,0.1)',
+                  color: email.processed ? '#22c55e' : '#f59e0b',
+                  border: `1px solid ${email.processed ? 'rgba(34,197,94,0.2)' : 'rgba(245,158,11,0.2)'}`,
+                }}>
+                  {email.processed ? 'processed' : 'pending'}
+                </span>
               </div>
               {email.body && (
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {email.body.trim().slice(0, 80)}...
+                  {email.body.trim().slice(0, 90)}...
                 </p>
               )}
             </div>
           ))}
         </div>
 
-        {/* Email detail pane */}
+        {/* Detail pane */}
         {selected && (
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{selected.subject}</h2>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>From: {selected.sender}</p>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selected.date}</p>
+                <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{selected.subject}</h2>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>From: <span style={{ color: 'var(--text-secondary)' }}>{selected.sender}</span></p>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>Received: <span style={{ color: 'var(--text-secondary)' }}>{fmtDateTime(selected.date)}</span></p>
+                {selected.processed && (
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Processed: <span style={{ color: '#22c55e' }}>{fmtDateTime(selected.processed_at)}</span></p>
+                )}
               </div>
-              <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
+              <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
             </div>
-            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+            <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
               <pre style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.7, fontFamily: 'inherit' }}>
                 {selected.body || 'No body content.'}
               </pre>
@@ -93,13 +109,4 @@ export default function Emails() {
       </div>
     </div>
   )
-}
-
-function formatDate(dateStr) {
-  if (!dateStr) return ''
-  try {
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  } catch {
-    return dateStr?.slice(0, 10) || ''
-  }
 }

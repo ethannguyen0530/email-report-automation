@@ -149,9 +149,12 @@ class DatabaseManager:
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT p.id, p.project_name, c.name, p.status, p.progress_percent, p.owner
+            SELECT p.id, p.project_name, c.name, p.status, p.progress_percent, p.owner,
+                   MAX(u.created_at) as last_updated
             FROM projects p
             LEFT JOIN customers c ON p.customer_id = c.id
+            LEFT JOIN updates u ON u.project_id = p.id
+            GROUP BY p.id
             ORDER BY p.created_at DESC
         """)
         result = cursor.fetchall()

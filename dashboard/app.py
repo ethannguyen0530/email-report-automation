@@ -40,7 +40,20 @@ def project_view(project_id):
 # JSON API for React frontend
 @app.route('/api/summary')
 def api_summary():
-    return jsonify(db.get_executive_summary())
+    data = db.get_executive_summary()
+    # Convert projects tuples to dicts with last_updated
+    data['projects'] = [
+        {'id': r[0], 'name': r[1], 'customer': r[2], 'status': r[3], 'progress': r[4], 'owner': r[5], 'last_updated': r[6]}
+        for r in data['projects']
+    ]
+    return jsonify(data)
+
+@app.route('/api/report')
+def api_report():
+    from services.report_service import ReportService
+    summary = db.get_executive_summary()
+    rs = ReportService()
+    return rs.generate_executive_report_html(summary), 200, {'Content-Type': 'text/html'}
 
 @app.route('/api/customers')
 def api_customers():
@@ -67,7 +80,7 @@ def api_customer(customer_id):
 def api_projects():
     rows = db.get_all_projects()
     return jsonify([
-        {'id': r[0], 'name': r[1], 'customer': r[2], 'status': r[3], 'progress': r[4], 'owner': r[5]}
+        {'id': r[0], 'name': r[1], 'customer': r[2], 'status': r[3], 'progress': r[4], 'owner': r[5], 'last_updated': r[6]}
         for r in rows
     ])
 
@@ -110,13 +123,30 @@ def update_project(project_id):
 def api_emails():
     conn = db.get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT id, gmail_id, sender, subject, body, received_at, processed FROM emails ORDER BY received_at DESC LIMIT 50')
+    cursor.execute('SELECT id, gmail_id, sender, subject, body, received_at, processed, created_at FROM emails ORDER BY received_at DESC LIMIT 50')
     rows = cursor.fetchall()
     conn.close()
     return jsonify([
-        {'id': r[0], 'gmail_id': r[1], 'sender': r[2], 'subject': r[3], 'body': r[4], 'date': r[5], 'processed': bool(r[6])}
+        {'id': r[0], 'gmail_id': r[1], 'sender': r[2], 'subject': r[3], 'body': r[4], 'date': r[5], 'processed': bool(r[6]), 'processed_at': r[7]}
         for r in rows
     ])
+
+@app.route('/api/send-report', methods=['POST'])
+def send_report():
+    from services.report_service import ReportService
+    from services.slack_service import SlackService
+    from datetime import datetime
+    summary = db.get_executive_summary()
+    rs = ReportService()
+    ss = SlackService()
+    html = rs.generate_executive_report_html(summary)
+    email_ok = rs.send_email_report(
+        config.REPORT_RECIPIENTS,
+        f"Executive Project Summary - {datetime.now().strftime('%Y-%m-%d')}",
+        html
+    )
+    slack_ok = ss.send_report(summary)
+    return jsonify({'ok': True, 'email': email_ok, 'slack': slack_ok})
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file():

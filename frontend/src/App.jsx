@@ -5,6 +5,7 @@ import ProjectDetail from './pages/ProjectDetail'
 import CustomerDetail from './pages/CustomerDetail'
 import Uploads from './pages/Uploads'
 import Emails from './pages/Emails'
+import Report from './pages/Report'
 import './App.css'
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
         {page.name === 'customer'   && <CustomerDetail id={page.id} navigate={navigate} />}
         {page.name === 'uploads'    && <Uploads />}
         {page.name === 'emails'     && <Emails />}
+        {page.name === 'report'     && <Report />}
       </main>
     </div>
   )

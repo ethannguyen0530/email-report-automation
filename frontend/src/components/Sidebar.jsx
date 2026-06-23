@@ -1,6 +1,7 @@
 const NAV = [
   { name: 'dashboard', label: 'Overview',  icon: GridIcon },
   { name: 'emails',    label: 'Emails',    icon: EmailIcon },
+  { name: 'report',    label: 'Report',    icon: ReportIcon },
   { name: 'uploads',   label: 'Files',     icon: UploadIcon },
 ]
 
@@ -67,6 +68,15 @@ function GridIcon({ size = 16 }) {
       <rect x="9" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.9"/>
       <rect x="1" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.9"/>
       <rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.9"/>
+    </svg>
+  )
+}
+
+function ReportIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <path d="M9 1H3.5A1.5 1.5 0 002 2.5v11A1.5 1.5 0 003.5 15h9a1.5 1.5 0 001.5-1.5V6L9 1z" stroke="currentColor" strokeWidth="1.2"/>
+      <path d="M9 1v5h5M5 9h6M5 12h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
     </svg>
   )
 }
