@@ -199,7 +199,7 @@ def api_emails():
     conn = db.get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        'SELECT id, gmail_id, sender, subject, body, received_at, processed, created_at '
+        'SELECT id, gmail_id, sender, subject, body, received_at, processed, processed_at '
         'FROM emails ORDER BY received_at DESC LIMIT 50'
     )
     rows = cursor.fetchall()

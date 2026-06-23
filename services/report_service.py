@@ -67,31 +67,6 @@ class ReportService:
             for b in summary_data['blockers']
         ]) or '<p style="color:#94a3b8;font-size:14px;margin:0;padding:12px 0">No blockers reported.</p>'
 
-        # Project highlights — milestones and notes only (blockers shown separately above)
-        notes = [n for n in summary_data.get('project_notes', []) if n.get('type') != 'blocker']
-        TYPE_STYLE = {
-            'milestone': {'border': '#22c55e', 'bg': '#f0fdf4', 'label': 'MILESTONE', 'lc': '#16a34a', 'tc': '#14532d'},
-            'note':      {'border': '#7c3aed', 'bg': '#faf5ff', 'label': 'UPDATE',    'lc': '#7c3aed', 'tc': '#3b0764'},
-        }
-        notes_html = ''
-        for n in notes:
-            s = TYPE_STYLE.get(n.get('type', 'note'), TYPE_STYLE['note'])
-            sc = STATUS_COLORS.get(n.get('status', ''), {'dot': '#94a3b8', 'text': '#64748b', 'bg': '#f1f5f9'})
-            notes_html += f"""
-            <div style="padding:14px 16px;background:{s['bg']};border-radius:10px;border-left:3px solid {s['border']};margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
-                <div style="flex:1;min-width:0">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
-                        <span style="font-weight:700;color:#1e293b;font-size:13px">{n['project']}</span>
-                        {f'<span style="color:#94a3b8;font-size:12px">· {n["customer"]}</span>' if n.get("customer") else ''}
-                        <span style="font-size:9px;font-weight:800;letter-spacing:0.08em;color:{s['lc']};background:{s['border']}18;padding:2px 7px;border-radius:99px">{s['label']}</span>
-                    </div>
-                    <p style="margin:0;color:{s['tc']};font-size:13px;line-height:1.6">{n['note']}</p>
-                </div>
-                <span style="font-size:11px;color:#94a3b8;white-space:nowrap;flex-shrink:0">{(n.get('date') or '')[:10]}</span>
-            </div>"""
-        if not notes_html:
-            notes_html = '<p style="color:#94a3b8;font-size:14px;margin:0;padding:12px 0">No milestones recorded yet.</p>'
-
         # Metric cards
         def metric_card(value, label, color):
             return f"""

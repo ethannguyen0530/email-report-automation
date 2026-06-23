@@ -54,9 +54,16 @@ class DatabaseManager:
                 body TEXT,
                 received_at TIMESTAMP,
                 processed BOOLEAN DEFAULT 0,
+                processed_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        # Migrate existing DBs that predate the processed_at column
+        try:
+            cursor.execute("ALTER TABLE emails ADD COLUMN processed_at TIMESTAMP")
+            conn.commit()
+        except Exception:
+            pass
 
         conn.commit()
         conn.close()
@@ -133,7 +140,10 @@ class DatabaseManager:
     def mark_email_processed(self, gmail_id):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("UPDATE emails SET processed = 1 WHERE gmail_id = ?", (gmail_id,))
+        cursor.execute(
+            "UPDATE emails SET processed = 1, processed_at = CURRENT_TIMESTAMP WHERE gmail_id = ?",
+            (gmail_id,)
+        )
         conn.commit()
         conn.close()
 

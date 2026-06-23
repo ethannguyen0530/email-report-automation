@@ -14,7 +14,6 @@ from services.extraction_service import ExtractionService
 from services.report_service import ReportService
 from services.slack_service import SlackService
 from mock_data.sample_emails import MOCK_EMAILS, MOCK_PROCESSED_DATA
-from dashboard.app import app
 
 
 def seed_database_with_mock_data():
@@ -34,7 +33,7 @@ def seed_database_with_mock_data():
         db.insert_update(
             proj_id,
             data['update_date'],
-            "Update from email",
+            data.get('milestone') or data.get('project', 'Update'),
             data['blocker'],
             data['milestone'],
             data['owner']
@@ -183,6 +182,7 @@ def show_menu():
         elif choice == '3':
             generate_and_send_reports()
         elif choice == '4':
+            from dashboard.app import app
             print("\nStarting dashboard on http://localhost:5001")
             print("Press Ctrl+C to stop")
             try:

@@ -81,21 +81,38 @@ class GmailService:
             return ''
 
     def _extract_text(self, payload):
-        # Prefer plain text
-        if payload.get('mimeType') == 'text/plain':
+        mime = payload.get('mimeType', '')
+
+        if mime == 'text/plain':
+            data = payload.get('body', {}).get('data', '')
+            return base64.urlsafe_b64decode(data).decode('utf-8', errors='replace') if data else ''
+
+        parts = payload.get('parts', [])
+        if parts:
+            # Pass 1: plain text children (handles multipart/alternative correctly)
+            for part in parts:
+                if part.get('mimeType') == 'text/plain':
+                    result = self._extract_text(part)
+                    if result:
+                        return result
+            # Pass 2: nested multipart containers
+            for part in parts:
+                if part.get('mimeType', '').startswith('multipart/'):
+                    result = self._extract_text(part)
+                    if result:
+                        return result
+            # Pass 3: HTML fallback
+            for part in parts:
+                if part.get('mimeType') == 'text/html':
+                    result = self._extract_text(part)
+                    if result:
+                        return result
+
+        if mime == 'text/html':
             data = payload.get('body', {}).get('data', '')
             if data:
-                return base64.urlsafe_b64decode(data).decode('utf-8', errors='replace')
-        # Recurse into parts (handles nested multipart/alternative, multipart/mixed)
-        for part in payload.get('parts', []):
-            result = self._extract_text(part)
-            if result:
-                return result
-        # Fall back to HTML if no plain text found anywhere
-        if payload.get('mimeType') == 'text/html':
-            data = payload.get('body', {}).get('data', '')
-            if data:
-                raw = base64.urlsafe_b64decode(data).decode('utf-8', errors='replace')
                 import re
+                raw = base64.urlsafe_b64decode(data).decode('utf-8', errors='replace')
                 return re.sub(r'<[^>]+>', ' ', raw)
+
         return ''
