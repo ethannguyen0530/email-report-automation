@@ -67,12 +67,11 @@ class ReportService:
             for b in summary_data['blockers']
         ]) or '<p style="color:#94a3b8;font-size:14px;margin:0;padding:12px 0">No blockers reported.</p>'
 
-        # Project highlights — blockers in red, milestones in green, notes in purple
-        notes = summary_data.get('project_notes', [])
+        # Project highlights — milestones and notes only (blockers shown separately above)
+        notes = [n for n in summary_data.get('project_notes', []) if n.get('type') != 'blocker']
         TYPE_STYLE = {
-            'blocker':   {'border': '#ef4444', 'bg': '#fff5f5', 'label': 'BLOCKER',   'lc': '#ef4444', 'tc': '#7f1d1d'},
             'milestone': {'border': '#22c55e', 'bg': '#f0fdf4', 'label': 'MILESTONE', 'lc': '#16a34a', 'tc': '#14532d'},
-            'note':      {'border': '#7c3aed', 'bg': '#faf5ff', 'label': 'NOTE',      'lc': '#7c3aed', 'tc': '#3b0764'},
+            'note':      {'border': '#7c3aed', 'bg': '#faf5ff', 'label': 'UPDATE',    'lc': '#7c3aed', 'tc': '#3b0764'},
         }
         notes_html = ''
         for n in notes:
@@ -91,7 +90,7 @@ class ReportService:
                 <span style="font-size:11px;color:#94a3b8;white-space:nowrap;flex-shrink:0">{(n.get('date') or '')[:10]}</span>
             </div>"""
         if not notes_html:
-            notes_html = '<p style="color:#94a3b8;font-size:14px;margin:0;padding:12px 0">No key highlights on record yet.</p>'
+            notes_html = '<p style="color:#94a3b8;font-size:14px;margin:0;padding:12px 0">No milestones recorded yet.</p>'
 
         # Metric cards
         def metric_card(value, label, color):
@@ -164,7 +163,7 @@ class ReportService:
   <div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin-bottom:28px">
     <div style="padding:18px 24px 14px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px">
       <div style="width:3px;height:16px;background:#7c3aed;border-radius:99px"></div>
-      <h2 style="font-size:13px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:0.05em">Key Highlights & Blockers</h2>
+      <h2 style="font-size:13px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:0.05em">Project Milestones & Updates</h2>
     </div>
     <div style="padding:16px 24px">{notes_html}</div>
   </div>
