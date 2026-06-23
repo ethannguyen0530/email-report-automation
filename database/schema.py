@@ -213,6 +213,19 @@ class DatabaseManager:
         cursor.execute("SELECT blocker FROM updates WHERE blocker IS NOT NULL ORDER BY update_date DESC LIMIT 5")
         blockers = [row[0] for row in cursor.fetchall()]
 
+        cursor.execute("""
+            SELECT p.project_name, c.name, u.summary, u.update_date, u.owner_name
+            FROM updates u
+            JOIN projects p ON u.project_id = p.id
+            LEFT JOIN customers c ON p.customer_id = c.id
+            WHERE u.summary IS NOT NULL AND u.summary != ''
+            ORDER BY u.update_date DESC LIMIT 20
+        """)
+        project_notes = [
+            {'project': r[0], 'customer': r[1], 'note': r[2], 'date': r[3], 'owner': r[4]}
+            for r in cursor.fetchall()
+        ]
+
         conn.close()
 
         return {
@@ -223,5 +236,6 @@ class DatabaseManager:
             'completed': status_counts.get('Completed', 0),
             'accomplishments': accomplishments,
             'blockers': blockers,
+            'project_notes': project_notes,
             'projects': self.get_all_projects()
         }
