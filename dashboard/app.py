@@ -129,7 +129,7 @@ def run_report_send():
 
 
 def start_scheduler():
-    if config.SCAN_INTERVAL_MINUTES <= 0 and config.REPORT_SEND_HOURS <= 0:
+    if config.SCAN_INTERVAL_MINUTES <= 0 and not config.REPORT_SEND_TIME:
         return
     from apscheduler.schedulers.background import BackgroundScheduler
     scheduler = BackgroundScheduler(daemon=True)
@@ -137,10 +137,11 @@ def start_scheduler():
         scheduler.add_job(run_email_scan, 'interval', minutes=config.SCAN_INTERVAL_MINUTES,
                           id='email_scan', replace_existing=True)
         log.info("Scheduler: email scan every %d min", config.SCAN_INTERVAL_MINUTES)
-    if config.REPORT_SEND_HOURS > 0:
-        scheduler.add_job(run_report_send, 'interval', hours=config.REPORT_SEND_HOURS,
+    if config.REPORT_SEND_TIME:
+        scheduler.add_job(run_report_send, 'cron',
+                          hour=config.REPORT_SEND_HOUR, minute=config.REPORT_SEND_MINUTE,
                           id='report_send', replace_existing=True)
-        log.info("Scheduler: report send every %dh", config.REPORT_SEND_HOURS)
+        log.info("Scheduler: report send daily at %s", config.REPORT_SEND_TIME)
     scheduler.start()
 
 

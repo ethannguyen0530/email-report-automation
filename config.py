@@ -28,11 +28,16 @@ DB_PATH = os.getenv("DB_PATH", "projects.db")
 GMAIL_QUERY = os.getenv("GMAIL_QUERY", "label:project-updates OR subject:project OR subject:update")
 GMAIL_MAX_RESULTS = int(os.getenv("GMAIL_MAX_RESULTS", "10"))
 
-# Scheduling — set to 0 to disable
+# Scheduling — set SCAN_INTERVAL_MINUTES=0 to disable auto-scan
 # SCAN_INTERVAL_MINUTES: how often to check Gmail for new emails (default 15 min)
 SCAN_INTERVAL_MINUTES = int(os.getenv("SCAN_INTERVAL_MINUTES",
     str(int(os.getenv("SCAN_INTERVAL_HOURS", "0")) * 60 or 15)))
-REPORT_SEND_HOURS = int(os.getenv("REPORT_SEND_HOURS", "24"))
+# REPORT_SEND_TIME: fixed daily time to send the executive report (24h format, default 09:00)
+# Set to empty string to disable auto-report
+_send_time = os.getenv("REPORT_SEND_TIME", "09:00").strip()
+REPORT_SEND_TIME = _send_time
+REPORT_SEND_HOUR = int(_send_time.split(":")[0]) if _send_time else None
+REPORT_SEND_MINUTE = int(_send_time.split(":")[1]) if _send_time else None
 
 # Flask
 FLASK_ENV = os.getenv("FLASK_ENV", "production")
