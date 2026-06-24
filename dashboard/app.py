@@ -204,6 +204,7 @@ def send_report():
     summary = db.get_executive_summary()
     rs = ReportService()
     ss = SlackService()
+    summary['ai_brief'] = rs._generate_ai_intro(summary)
     html = rs.generate_executive_report_html(summary)
     recipients = db.get_recipient_emails() or config.REPORT_RECIPIENTS
     email_ok = rs.send_email_report(
@@ -258,7 +259,7 @@ def api_project(project_id):
 
 @app.route('/api/projects/<int:project_id>', methods=['PATCH'])
 def update_project(project_id):
-    data = request.get_json()
+    data = request.get_json() or {}
     conn = db.get_connection()
     cursor = conn.cursor()
     allowed = {'status', 'progress_percent', 'owner'}
@@ -490,7 +491,7 @@ def api_status():
 def sse_stream():
     """Server-Sent Events — pushes scan_complete events to connected dashboards."""
     def event_gen():
-        q = queue.Queue()
+        q = queue.Queue(maxsize=50)
         with _sse_lock:
             _sse_clients.append(q)
         try:

@@ -35,7 +35,7 @@ class ReportService:
         completed = summary_data.get('completed', 0)
         blockers = summary_data.get('blockers', [])
         notes = summary_data.get('project_notes', [])
-        n_customers = len(set(self._project_customer(p) for p in summary_data.get('projects', [])))
+        n_customers = len(set(self._project_customer(p) for p in summary_data.get('projects', [])) - {'Other'})
 
         # Sentence 1 — portfolio health
         health_pct = round(on_track / total * 100) if total else 0
@@ -145,7 +145,7 @@ class ReportService:
             if c not in customer_status:
                 customer_status[c] = {'on_track': 0, 'at_risk': 0, 'delayed': 0, 'completed': 0, 'other': 0}
             s = p['status']
-            if s == 'On Track': customer_status[c]['on_track'] += 1
+            if s in ('On Track', 'In Progress'): customer_status[c]['on_track'] += 1
             elif s == 'At Risk': customer_status[c]['at_risk'] += 1
             elif s == 'Delayed': customer_status[c]['delayed'] += 1
             elif s == 'Completed': customer_status[c]['completed'] += 1

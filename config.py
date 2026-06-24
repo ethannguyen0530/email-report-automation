@@ -43,6 +43,8 @@ if _send_time:
             raise ValueError("expected HH:MM format")
         REPORT_SEND_HOUR = int(_parts[0])
         REPORT_SEND_MINUTE = int(_parts[1])
+        if not (0 <= REPORT_SEND_HOUR <= 23 and 0 <= REPORT_SEND_MINUTE <= 59):
+            raise ValueError(f"hour must be 0-23, minute must be 0-59")
     except (ValueError, IndexError):
         import sys
         print(f"WARNING: Invalid REPORT_SEND_TIME '{_send_time}' — expected HH:MM (e.g. 09:00). Auto-report disabled.", file=sys.stderr)

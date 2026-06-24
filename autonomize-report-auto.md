@@ -6,6 +6,30 @@
 
 ---
 
+## Session 4 — June 24, 2026
+
+### Code Review — 6 Bugs Found and Fixed
+
+Full automated code review (8 finder angles × 6 candidates → verify) surfaced and fixed:
+
+| # | File | Bug | Fix |
+|---|---|---|---|
+| 1 | `dashboard/app.py` | `/api/send-report` (manual send button) never set `summary['ai_brief']` — both `generate_executive_report_html` and `build_slack_blocks` independently called `_generate_ai_intro`, firing 2 GPT calls instead of 1; email intro and Slack intro could diverge | Added `summary['ai_brief'] = rs._generate_ai_intro(summary)` before the two downstream calls, mirroring `run_report_send()` |
+| 2 | `dashboard/app.py` | `PATCH /api/projects/<id>`: `request.get_json()` returns `None` when `Content-Type` header is missing — `data.items()` raised `AttributeError`, crashing the endpoint and leaking the DB connection opened on the previous line | Changed to `request.get_json() or {}` |
+| 3 | `config.py` | `REPORT_SEND_TIME=25:99` passed the format check (both parts parse as int) but `scheduler.add_job(hour=25)` caused APScheduler to raise `ValueError` at startup — Flask crashed before serving any request, killing all background jobs | Added `if not (0 <= REPORT_SEND_HOUR <= 23 and 0 <= REPORT_SEND_MINUTE <= 59): raise ValueError(...)` inside the existing try/except |
+| 4 | `services/report_service.py` | Customer Snapshot showed false green "On Track" for customers whose projects were all `"In Progress"` — the status tallying only incremented `on_track` for literal `"On Track"`, so `delayed=0` and `at_risk=0` always fell through to the green signal | Added `"In Progress"` to the `on_track` bucket in the tallying logic |
+| 5 | `services/report_service.py` | `_executive_brief_fallback` included `"Other"` (the synthetic bucket for projects with no extracted customer) in `n_customers` — brief read "across N clients" where N was inflated by 1 | Changed to `set(...) - {'Other'}` to exclude the synthetic bucket |
+| 6 | `dashboard/app.py` | SSE client queues (`queue.Queue()`) were unbounded — `put_nowait` on an unbounded queue never raises, so dead browser clients (dropped TCP connections) could never be detected and cleaned up, accumulating stale queues indefinitely | Changed to `queue.Queue(maxsize=50)` so `put_nowait` raises `queue.Full` for stale clients, allowing the `except Exception: pass` in `_sse_broadcast` to silently drop them |
+
+**Files changed:** `dashboard/app.py`, `config.py`, `services/report_service.py`
+
+**Intentionally not fixed (low severity, no behavioral impact under normal operation):**
+- `insert_update`, `mark_email_flagged`, `mark_email_processed` — no `try/finally` around connection close (leaks on rare DB error)
+- `get_executive_summary` — same pattern
+- `delete_customer` — leaves orphaned rows in `emails` table after cascade
+
+---
+
 ## Session 3 — June 23, 2026
 
 ### 1. Email Sending — Wired Up and Tested
