@@ -14,49 +14,97 @@ STATUS_COLORS = {
 
 class ReportService:
 
+    def _executive_brief_fallback(self, summary_data):
+        """Build a 3-sentence executive brief from raw data (no GPT required)."""
+        total = summary_data['total_projects']
+        on_track = summary_data['on_track']
+        at_risk = summary_data['at_risk']
+        delayed = summary_data['delayed']
+        completed = summary_data.get('completed', 0)
+        blockers = summary_data.get('blockers', [])
+        notes = summary_data.get('project_notes', [])
+        n_customers = len(set(self._project_customer(p) for p in summary_data.get('projects', [])))
+
+        # Sentence 1 — portfolio health
+        health_pct = round(on_track / total * 100) if total else 0
+        s1 = f"{on_track} of {total} engagements across {n_customers} clients are on track ({health_pct}% portfolio health)."
+
+        # Sentence 2 — risk / delay (pull names directly from projects list for accuracy)
+        all_projects = summary_data.get('projects', [])
+        flagged_names = []
+        for p in all_projects:
+            if isinstance(p, dict):
+                pname, pstatus = p.get('project_name', ''), p.get('status', '')
+            else:
+                pname, pstatus = p[1], p[3]
+            if pstatus in ('At Risk', 'Delayed'):
+                flagged_names.append(pname)
+        issues = at_risk + delayed
+        if issues:
+            name_clause = f" — {', '.join(flagged_names)}" if flagged_names else ""
+            verb = "require" if issues > 1 else "requires"
+            s2 = f"{issues} engagement{'s' if issues > 1 else ''}{name_clause} {verb} immediate leadership review."
+        else:
+            s2 = "All engagements are progressing within expected parameters."
+
+        # Sentence 3 — blocker or completion signal
+        if blockers:
+            brief_blocker = blockers[0][:90].rstrip('.,') + ('...' if len(blockers[0]) > 90 else '.')
+            s3 = f"Active blocker: {brief_blocker}"
+        elif completed:
+            s3 = f"{completed} engagement{'s' if completed > 1 else ''} delivered this period — client close-out communication recommended."
+        else:
+            s3 = "No active blockers reported; maintain standard cadence."
+
+        return f"{s1} {s2} {s3}"
+
     def _generate_ai_intro(self, summary_data):
-        """Generate a single executive summary sentence via GPT."""
+        """Generate a 3-sentence executive brief via GPT, or fall back to structured data."""
         if not config.OPENAI_API_KEY:
-            total = summary_data['total_projects']
-            on_track = summary_data['on_track']
-            at_risk = summary_data['at_risk']
-            delayed = summary_data['delayed']
-            problem = f"{at_risk + delayed} project(s) need attention" if (at_risk or delayed) else "all projects are on track"
-            return f"{total} active projects across {len(set(self._project_customer(p) for p in summary_data['projects']))} customers — {problem}."
+            return self._executive_brief_fallback(summary_data)
 
         try:
             from openai import OpenAI
             client = OpenAI(api_key=config.OPENAI_API_KEY)
-            notes = summary_data.get('project_notes', [])
-            at_risk_items = [n for n in notes if n['status'] in ('At Risk', 'Delayed')]
             blockers = summary_data.get('blockers', [])
+            all_projects = summary_data.get('projects', [])
+            flagged = []
+            for p in all_projects:
+                if isinstance(p, dict):
+                    pname, pstatus = p.get('project_name', ''), p.get('status', '')
+                else:
+                    pname, pstatus = p[1], p[3]
+                if pstatus in ('At Risk', 'Delayed'):
+                    flagged.append(pname)
             context = (
-                f"Total: {summary_data['total_projects']} projects, "
+                f"Portfolio: {summary_data['total_projects']} projects, "
                 f"{summary_data['on_track']} on track, "
                 f"{summary_data['at_risk']} at risk, "
-                f"{summary_data['delayed']} delayed. "
+                f"{summary_data['delayed']} delayed, "
+                f"{summary_data.get('completed', 0)} completed. "
             )
-            if at_risk_items:
-                context += f"Flagged: {', '.join(n['project'] for n in at_risk_items[:3])}. "
+            if flagged:
+                context += f"At-risk engagements: {', '.join(flagged[:3])}. "
             if blockers:
-                context += f"Blockers: {blockers[0]}. "
+                context += f"Top blocker: {blockers[0][:120]}. "
             prompt = (
-                "Write exactly 1 sentence (max 25 words) for an executive project status report. "
-                "State the portfolio status and the single most important concern. Direct, no fluff. "
+                "Write exactly 3 sentences for a C-suite executive project status report. "
+                "Sentence 1: overall portfolio health as a single crisp fact. "
+                "Sentence 2: the most critical risk or delay requiring leadership action. "
+                "Sentence 3: the top blocker or a delivery milestone. "
+                "Rules: executive business language, no filler words, max 20 words per sentence, "
+                "no bullet points, no headers, plain prose only. "
                 f"Data: {context}"
             )
             resp = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=60,
+                max_tokens=120,
             )
             return resp.choices[0].message.content.strip()
         except Exception:
-            total = summary_data['total_projects']
-            at_risk = summary_data['at_risk']
-            return (f"{total} active projects monitored — "
-                    f"{'immediate attention required on ' + str(at_risk) + ' item(s).' if at_risk else 'portfolio is stable.'}")
+            return self._executive_brief_fallback(summary_data)
 
     def _project_customer(self, proj):
         if isinstance(proj, dict):

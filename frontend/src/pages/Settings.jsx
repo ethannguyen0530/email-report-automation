@@ -4,6 +4,7 @@ export default function Settings() {
   const [recipients, setRecipients] = useState([])
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
+  const [position, setPosition] = useState('')
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
@@ -22,7 +23,7 @@ export default function Settings() {
       const res = await fetch('/api/recipients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), name: name.trim() }),
+        body: JSON.stringify({ email: email.trim(), name: name.trim(), position: position.trim() }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -30,6 +31,7 @@ export default function Settings() {
       } else {
         setEmail('')
         setName('')
+        setPosition('')
         setSuccess(`${email.trim()} added`)
         load()
         setTimeout(() => setSuccess(null), 3000)
@@ -45,8 +47,18 @@ export default function Settings() {
     setRecipients(prev => prev.filter(r => r.id !== id))
   }
 
+  const inputStyle = {
+    width: '100%', padding: '9px 12px',
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid var(--border)',
+    borderRadius: 8, color: 'var(--text-primary)',
+    fontSize: 13, outline: 'none',
+    fontFamily: 'var(--font-body)',
+    boxSizing: 'border-box',
+  }
+
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 680 }}>
       <div style={{ marginBottom: 36 }}>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontFamily: 'var(--font-heading)' }}>Configuration</p>
         <h1 style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.5px', fontFamily: 'var(--font-heading)' }}>Report Recipients</h1>
@@ -59,7 +71,7 @@ export default function Settings() {
       <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 24, marginBottom: 20 }}>
         <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16, fontFamily: 'var(--font-heading)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Add Recipient</h2>
         <form onSubmit={add}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
               <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Email Address *</label>
               <input
@@ -68,14 +80,7 @@ export default function Settings() {
                 onChange={e => setEmail(e.target.value)}
                 placeholder="leader@autonomize.ai"
                 required
-                style={{
-                  width: '100%', padding: '9px 12px',
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 8, color: 'var(--text-primary)',
-                  fontSize: 13, outline: 'none',
-                  fontFamily: 'var(--font-body)',
-                }}
+                style={inputStyle}
                 onFocus={e => e.target.style.borderColor = '#731FE3'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
@@ -86,15 +91,20 @@ export default function Settings() {
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="Ujjwal Sharma"
-                style={{
-                  width: '100%', padding: '9px 12px',
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 8, color: 'var(--text-primary)',
-                  fontSize: 13, outline: 'none',
-                  fontFamily: 'var(--font-body)',
-                }}
+                placeholder="Ujjwal Rajbhandari"
+                style={inputStyle}
+                onFocus={e => e.target.style.borderColor = '#731FE3'}
+                onBlur={e => e.target.style.borderColor = 'var(--border)'}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Position (optional)</label>
+              <input
+                type="text"
+                value={position}
+                onChange={e => setPosition(e.target.value)}
+                placeholder="CEO, VP of Engineering..."
+                style={inputStyle}
                 onFocus={e => e.target.style.borderColor = '#731FE3'}
                 onBlur={e => e.target.style.borderColor = 'var(--border)'}
               />
@@ -116,7 +126,7 @@ export default function Settings() {
               {adding ? 'Adding...' : '+ Add Recipient'}
             </button>
             {error && <span style={{ fontSize: 13, color: '#ef4444' }}>{error}</span>}
-            {success && <span style={{ fontSize: 13, color: '#22c55e' }}>✓ {success}</span>}
+            {success && <span style={{ fontSize: 13, color: '#22c55e' }}>+ {success}</span>}
           </div>
         </form>
       </div>
@@ -154,8 +164,19 @@ export default function Settings() {
                   {(r.name || r.email).charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  {r.name && <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 1 }}>{r.name}</p>}
-                  <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.email}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 1 }}>
+                    {r.name && <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', margin: 0 }}>{r.name}</p>}
+                    {r.position && (
+                      <span style={{
+                        fontSize: 11, color: '#a78bfa',
+                        background: 'rgba(115,31,227,0.1)',
+                        border: '1px solid rgba(115,31,227,0.2)',
+                        borderRadius: 4, padding: '1px 7px',
+                        fontWeight: 500, letterSpacing: '0.02em',
+                      }}>{r.position}</span>
+                    )}
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>{r.email}</p>
                 </div>
               </div>
               <button onClick={() => remove(r.id, r.email)}
@@ -175,7 +196,7 @@ export default function Settings() {
       </div>
 
       <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 16, lineHeight: 1.6 }}>
-        These recipients receive the executive report when sent manually or automatically.
+        These recipients receive the executive report when sent manually or automatically at 9:00 AM daily.
         The REPORT_RECIPIENTS value in .env is used as a fallback if this list is empty.
       </p>
     </div>

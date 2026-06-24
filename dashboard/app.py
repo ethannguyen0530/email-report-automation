@@ -520,9 +520,10 @@ def add_recipient():
     data = request.get_json()
     email = (data.get('email') or '').strip().lower()
     name = (data.get('name') or '').strip()
+    position = (data.get('position') or '').strip()
     if not email or '@' not in email:
         return jsonify({'error': 'Valid email required'}), 400
-    rid = db.add_recipient(email, name)
+    rid = db.add_recipient(email, name, position)
     if rid is None:
         return jsonify({'error': 'Email already exists'}), 409
     return jsonify({'ok': True, 'id': rid})

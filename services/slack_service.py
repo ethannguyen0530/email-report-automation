@@ -118,18 +118,13 @@ class SlackService:
 
         blocks.append({"type": "divider"})
 
-        # AI intro
-        if data.get('accomplishments') or data.get('blockers') or normalized:
-            total = data.get('total_projects', len(normalized))
-            at_risk = data.get('at_risk', 0)
-            delayed = data.get('delayed', 0)
-            n_customers = len(customer_status)
-            concern = f"{at_risk + delayed} project(s) need attention" if (at_risk or delayed) else "all projects are on track"
-            intro = f"{total} active projects across {n_customers} customers — {concern}."
-            blocks.append({
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"_{intro}_"}
-            })
+        # Executive brief — same 3-sentence generator as the email report
+        from services.report_service import ReportService
+        intro = ReportService()._generate_ai_intro(data)
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"_{intro}_"}
+        })
 
         # Metric strip
         blocks.append({

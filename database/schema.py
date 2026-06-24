@@ -74,6 +74,7 @@ class DatabaseManager:
             "ALTER TABLE emails ADD COLUMN flag_reason TEXT",
             "ALTER TABLE updates ADD COLUMN gmail_id TEXT",
             "ALTER TABLE updates ADD COLUMN confidence INTEGER",
+            "ALTER TABLE recipients ADD COLUMN position TEXT",
         ]
         for sql in migrations:
             try:
@@ -268,16 +269,17 @@ class DatabaseManager:
     def get_recipients(self):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, email, name, created_at FROM recipients ORDER BY created_at ASC")
+        cursor.execute("SELECT id, email, name, position, created_at FROM recipients ORDER BY created_at ASC")
         result = cursor.fetchall()
         conn.close()
-        return [{'id': r[0], 'email': r[1], 'name': r[2], 'created_at': r[3]} for r in result]
+        return [{'id': r[0], 'email': r[1], 'name': r[2], 'position': r[3], 'created_at': r[4]} for r in result]
 
-    def add_recipient(self, email, name=None):
+    def add_recipient(self, email, name=None, position=None):
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute("INSERT INTO recipients (email, name) VALUES (?, ?)", (email, name or ''))
+            cursor.execute("INSERT INTO recipients (email, name, position) VALUES (?, ?, ?)",
+                           (email, name or '', position or ''))
             conn.commit()
             rid = cursor.lastrowid
             conn.close()
