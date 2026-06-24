@@ -113,7 +113,100 @@ Full automated code review (8 finder angles × 6 candidates → verify) surfaced
 
 ---
 
-### 6. Known Open Issue — APScheduler Crash Loop
+### 6. Report Schedule — Fixed to 9 AM Cron
+
+**Problem:** Scheduler used `'interval', hours=24` — fired 24 hours after service startup, not at a fixed time. If service restarted at 3 PM, report fired at 3 PM daily.  
+**Fix:** Replaced interval trigger with APScheduler `cron` trigger. New env var `REPORT_SEND_TIME` (24h format, default `09:00`) controls the daily fire time. `REPORT_SEND_HOURS` removed.  
+**Safety:** Parsing wrapped in `try/except` — a malformed value (e.g. `9am`, `0900`) prints a warning and disables auto-report instead of crashing Flask at import time with an `IndexError`.
+
+**Files changed:** `config.py`, `dashboard/app.py`, `.env`, `SETUP.md`
+
+---
+
+### 7. Database — Duplicate Project Cleanup
+
+**Problem:** Dashboard showed two "ACI Scan Implementation" entries with different scores (40 and 100). Also CVS, Cigna, and Molina each had a clean-name row AND a suffix row (`- UAT Approved`, `- Phase 1 Complete`, `- Needs Client Review`) from email subject lines being used as project names. Additionally, 7 junk Slack onboarding tutorial emails had created garbage projects under "Unknown Customer".
+
+**Fix — Merge duplicates:** One-off script merged updates from all suffix/duplicate rows into canonical rows, then deleted the extras:
+- ACI Scan Implementation (×2, both Autonomize Internal) → merged into one (Delayed/25%)
+- CVS Integration + CVS Integration - UAT Approved → CVS Integration
+- Cigna Migration + Cigna Migration - Phase 1 Complete → Cigna Migration
+- Molina Implementation + Molina Implementation - Needs Client Review → Molina Implementation
+
+**Fix — Delete junk:** 7 Slack tutorial projects (IDs 9–15) and their 14 associated updates deleted.
+
+**Fix — Prevent future duplicates:** `get_or_create_project()` now falls back to a project-name-only lookup before INSERT. If a project with that name already exists under any customer (e.g. a second email arrives for the same project but inference fails), it returns the existing row instead of creating a duplicate.
+
+**Result:** DB now has exactly 4 clean projects, each with 5 merged updates.
+
+**Files changed:** `database/schema.py` (runtime guard), DB patched in-place
+
+---
+
+### 8. Executive Brief — 3 Sentences, Executive Language
+
+**Problem:** Report intro was 1 vague sentence. Executives need specific, actionable facts in 3 sentences max.  
+**Fix:** Rewrote `_generate_ai_intro()` in `report_service.py`:
+- GPT prompt updated: exactly 3 sentences, C-suite language, max 20 words each, no filler
+  - Sentence 1: portfolio health as a crisp fact
+  - Sentence 2: the most critical risk requiring leadership action
+  - Sentence 3: top blocker or delivery milestone
+- No-GPT fallback (`_executive_brief_fallback`) builds the same 3-sentence structure from raw data
+- Extracted `_flagged_project_names()` helper — removes duplicated `isinstance(p, dict)` loop that was in both `_executive_brief_fallback` and `_generate_ai_intro`
+- `ai_brief` pre-computed once in `run_report_send()`, cached in `summary` dict — both email HTML and Slack read from it instead of each firing a separate GPT call
+
+**Sample output (live data, no GPT key):**  
+> "1 of 4 engagements across 4 clients are on track (25% portfolio health). 3 engagements — Cigna Migration, Molina Implementation, ACI Scan Implementation require immediate leadership review. Active blocker: Client approval on data model - expected by June 28."
+
+**Files changed:** `services/report_service.py`, `services/slack_service.py`, `dashboard/app.py`
+
+---
+
+### 9. Recipients Tab — Optional Position Field
+
+**Problem:** Recipients list showed name + email but no role context. Ujjwal needs to know who each person is when managing the list.  
+**Fix:**
+- `recipients` table: added `position TEXT` column (migration-safe via `ALTER TABLE` in startup migrations)
+- `add_recipient(email, name, position)` — new optional arg
+- `GET /api/recipients` now returns `position` field
+- `POST /api/recipients` accepts optional `position` in request body
+- Settings.jsx form: 3-column layout (Email required / Name optional / Position optional)
+- Recipients list: position shown as a purple badge next to the name
+- Footer: send time fetched from `/api/status` (`report_send_time` field) instead of hardcoded "9:00 AM"
+
+**Files changed:** `database/schema.py`, `dashboard/app.py`, `frontend/src/pages/Settings.jsx`
+
+---
+
+### 10. Code Review Round 2 — 6 More Bugs Fixed
+
+Second automated review pass surfaced and fixed:
+
+| # | File | Bug | Fix |
+|---|---|---|---|
+| 1 | `config.py` | `REPORT_SEND_TIME=9am` or `0900` → `split(':')[1]` raises `IndexError` at module import, crashing Flask before it starts | Wrapped in `try/except`; malformed value prints clear warning and disables auto-report |
+| 2 | `database/schema.py` | If inference changed `customer_id` on a 2nd scan but failed on the 1st, `INSERT` created a duplicate project under two different customers | Added name-only fallback `SELECT` before `INSERT` to return existing row regardless of customer |
+| 3 | `slack_service.py` | `customer_status` dict had no `'completed'` key — Completed projects incremented `total` only, causing the snapshot signal to read "On Track" for customers with only completed projects | Added `'completed'` bucket and `elif s == 'Completed'` branch |
+| 4 | `dashboard/app.py` + services | When OpenAI key is set, email send and Slack send each fired an independent `gpt-3.5-turbo` call — double cost and latency per report | `ai_brief` pre-computed once in `run_report_send()`, stored in `summary` dict, reused by both |
+| 5 | `dashboard/app.py` + `Settings.jsx` | Footer text hardcoded "at 9:00 AM daily" — immediately wrong if `REPORT_SEND_TIME` env var changes | `/api/status` now returns `report_send_time`; Settings.jsx reads and displays it dynamically |
+| 6 | `services/report_service.py` | Identical `isinstance(p, dict)` loop duplicated in `_executive_brief_fallback` and `_generate_ai_intro` | Extracted to `_flagged_project_names()` helper; both callers now use it |
+
+**Files changed:** `config.py`, `database/schema.py`, `services/report_service.py`, `services/slack_service.py`, `dashboard/app.py`, `frontend/src/pages/Settings.jsx`
+
+---
+
+### 11. Scalability Confirmed
+
+**How the system scales as Ujjwal receives more emails daily:**
+- Gmail scan runs every 15 min, deduplicates by `gmail_id TEXT UNIQUE` — same email never processed twice
+- Each scan appends new rows to `updates` table — no overwrites, no cap, no date filters
+- `get_executive_summary()` queries all-time data: current status of all projects, 10 most recent accomplishments, 5 most recent blockers, top 50 project notes
+- Daily report always reflects the full cumulative DB state — grows automatically as project count and email volume increase
+- SQLite handles thousands of projects and tens of thousands of updates without issue at this scale
+
+---
+
+### 12. Known Open Issue — APScheduler Crash Loop
 
 **Symptom:** `RuntimeError: cannot schedule new futures after shutdown` in `logs/server.log`. Auto-scan jobs are submitted to a shutdown thread pool executor and silently fail.  
 **Impact:** Auto-scan still runs after service restart, but missed jobs during the crash window are not retried.  
@@ -121,40 +214,63 @@ Full automated code review (8 finder angles × 6 candidates → verify) surfaced
 
 ---
 
-## Final File State — After Session 3
+## Final File State — After Session 3 (complete)
 
 ```
 email-report-automation/
 ├── .env                          SENDER_EMAIL/PASSWORD/RECIPIENTS filled (Ethan's test creds)
+│                                 REPORT_SEND_TIME=09:00 (replaces REPORT_SEND_HOURS)
 │
-├── database/schema.py            + try/finally in get_or_create_project
+├── config.py                     REPORT_SEND_TIME parsing with try/except crash guard
+│                                 REPORT_SEND_HOUR / REPORT_SEND_MINUTE parsed fields
+│
+├── database/schema.py            + try/finally connection leak fix
 │                                 + optional customer_name param (skip lookup)
-│                                 + LIKE-based prefix inference (min length 8, requires separator)
+│                                 + LIKE prefix inference (separator + min length 8)
+│                                 + name-only fallback SELECT before INSERT (no duplicates)
+│                                 + position column migration for recipients table
+│                                 + get_recipients() / add_recipient() updated for position
 │
 ├── services/
-│   ├── report_service.py         Email-safe HTML rewrite (table layouts, system fonts, no emojis)
-│   └── slack_service.py          Block Kit rewrite (no emojis, .get() safe access, truncation notice)
+│   ├── report_service.py         Email-safe HTML (table layouts, system fonts, no emojis)
+│   │                             _flagged_project_names() helper (deduplicates loop)
+│   │                             _executive_brief_fallback() (3-sentence structured brief)
+│   │                             _generate_ai_intro() (3-sentence GPT brief, C-suite language)
+│   │                             generate_executive_report_html() reads ai_brief from summary
+│   └── slack_service.py          Block Kit rewrite (no emojis, .get() safe access)
+│                                 completed bucket in customer_status
+│                                 reads ai_brief from summary (no duplicate GPT call)
 │
-└── [everything else from Session 2 unchanged]
+├── dashboard/app.py              run_report_send() pre-computes ai_brief once
+│                                 /api/status returns report_send_time
+│                                 /api/recipients POST accepts position
+│                                 cron scheduler at REPORT_SEND_HOUR:REPORT_SEND_MINUTE
+│
+└── frontend/src/pages/
+    └── Settings.jsx              3-column form (email / name / position)
+                                  position shown as purple badge in recipient list
+                                  footer reads send time from /api/status dynamically
 ```
 
 ---
 
-## Current Status — After Session 3
+## Current Status — After Session 3 (complete)
 
 **Service:** Running permanently at `http://localhost:5001` via launchd  
 **Auto-scan:** Every 15 minutes (`SCAN_INTERVAL_MINUTES=15`)  
-**Auto-report:** Every 24 hours (`REPORT_SEND_HOURS=24`) — sends email + Slack  
-**Email delivery:** Confirmed working (sent to ethann0530@gmail.com + ujjwal.rajbhandari@autonomize.ai)  
-**Terminal needed:** No
+**Auto-report:** Daily at 9:00 AM (`REPORT_SEND_TIME=09:00`) — email confirmed working  
+**Email delivery:** Confirmed (sent to ethann0530@gmail.com; Ujjwal added as recipient)  
+**Terminal needed:** No — launchd runs independently, survives terminal close  
+**Computer off:** Service stops — cloud deployment needed for true 24/7 uptime  
+**GitHub:** Fully up to date  
 
 **Still blocked on (Ujjwal to provide before go-live):**
-- `OPENAI_API_KEY` — required for AI extraction
+- `OPENAI_API_KEY` — required for GPT extraction and AI brief quality
 - `SLACK_BOT_TOKEN` + `SLACK_CHANNEL` — required for Slack delivery
-- `SENDER_EMAIL` + `SENDER_PASSWORD` — Ujjwal's Gmail + App Password (replace Ethan's test creds)
-- `REPORT_RECIPIENTS` → or add via Settings tab in the UI
-- `GMAIL_QUERY` tuned to real project update senders
-- **APScheduler crash loop** — fix `RuntimeError: cannot schedule new futures after shutdown`
+- `SENDER_EMAIL` + `SENDER_PASSWORD` — replace Ethan's test creds in `.env`
+- `GMAIL_QUERY` tuned to real project update senders/labels
+- Cloud deployment (Railway / Render / DO) — if true always-on is required
+- **APScheduler crash loop** — `RuntimeError: cannot schedule new futures after shutdown`
 
 **Restart command:**
 ```
