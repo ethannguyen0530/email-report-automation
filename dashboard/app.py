@@ -114,6 +114,7 @@ def run_report_send():
         summary = db.get_executive_summary()
         rs = ReportService()
         ss = SlackService()
+        summary['ai_brief'] = rs._generate_ai_intro(summary)  # generate once; reused by email + Slack
         html = rs.generate_executive_report_html(summary)
         # Use DB recipients, fall back to .env
         recipients = db.get_recipient_emails() or config.REPORT_RECIPIENTS
@@ -482,6 +483,7 @@ def api_status():
         'flagged_emails': flagged,
         'last_scan': _last_scan_result.get('time'),
         'scan_interval_minutes': config.SCAN_INTERVAL_MINUTES,
+        'report_send_time': config.REPORT_SEND_TIME or None,
     })
 
 @app.route('/api/stream')

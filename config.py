@@ -36,8 +36,22 @@ SCAN_INTERVAL_MINUTES = int(os.getenv("SCAN_INTERVAL_MINUTES",
 # Set to empty string to disable auto-report
 _send_time = os.getenv("REPORT_SEND_TIME", "09:00").strip()
 REPORT_SEND_TIME = _send_time
-REPORT_SEND_HOUR = int(_send_time.split(":")[0]) if _send_time else None
-REPORT_SEND_MINUTE = int(_send_time.split(":")[1]) if _send_time else None
+if _send_time:
+    try:
+        _parts = _send_time.split(":")
+        if len(_parts) < 2:
+            raise ValueError("expected HH:MM format")
+        REPORT_SEND_HOUR = int(_parts[0])
+        REPORT_SEND_MINUTE = int(_parts[1])
+    except (ValueError, IndexError):
+        import sys
+        print(f"WARNING: Invalid REPORT_SEND_TIME '{_send_time}' — expected HH:MM (e.g. 09:00). Auto-report disabled.", file=sys.stderr)
+        REPORT_SEND_TIME = ""
+        REPORT_SEND_HOUR = None
+        REPORT_SEND_MINUTE = None
+else:
+    REPORT_SEND_HOUR = None
+    REPORT_SEND_MINUTE = None
 
 # Flask
 FLASK_ENV = os.getenv("FLASK_ENV", "production")

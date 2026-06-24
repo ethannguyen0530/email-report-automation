@@ -54,11 +54,12 @@ class SlackService:
         for p in normalized:
             c = p.get('customer') or 'Other'
             if c not in customer_status:
-                customer_status[c] = {'on_track': 0, 'at_risk': 0, 'delayed': 0, 'total': 0}
+                customer_status[c] = {'on_track': 0, 'at_risk': 0, 'delayed': 0, 'completed': 0, 'total': 0}
             s = p.get('status', '')
             if s == 'On Track': customer_status[c]['on_track'] += 1
             elif s == 'At Risk': customer_status[c]['at_risk'] += 1
             elif s == 'Delayed': customer_status[c]['delayed'] += 1
+            elif s == 'Completed': customer_status[c]['completed'] += 1
             customer_status[c]['total'] += 1
 
         snapshot_lines = []
@@ -118,9 +119,11 @@ class SlackService:
 
         blocks.append({"type": "divider"})
 
-        # Executive brief — same 3-sentence generator as the email report
-        from services.report_service import ReportService
-        intro = ReportService()._generate_ai_intro(data)
+        # Executive brief — use pre-computed brief if available, otherwise generate
+        intro = data.get('ai_brief')
+        if not intro:
+            from services.report_service import ReportService
+            intro = ReportService()._generate_ai_intro(data)
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"_{intro}_"}

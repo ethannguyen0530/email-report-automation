@@ -8,11 +8,15 @@ export default function Settings() {
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
+  const [sendTime, setSendTime] = useState(null)
 
   const load = () =>
     fetch('/api/recipients').then(r => r.json()).then(setRecipients)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    fetch('/api/status').then(r => r.json()).then(d => setSendTime(d.report_send_time))
+  }, [])
 
   const add = async (e) => {
     e.preventDefault()
@@ -196,7 +200,8 @@ export default function Settings() {
       </div>
 
       <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 16, lineHeight: 1.6 }}>
-        These recipients receive the executive report when sent manually or automatically at 9:00 AM daily.
+        These recipients receive the executive report when sent manually or automatically
+        {sendTime ? ` at ${sendTime} daily` : ''}.
         The REPORT_RECIPIENTS value in .env is used as a fallback if this list is empty.
       </p>
     </div>

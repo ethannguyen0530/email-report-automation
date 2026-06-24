@@ -147,6 +147,14 @@ class DatabaseManager:
                 "SELECT id FROM projects WHERE customer_id = ? AND project_name = ?",
                 (customer_id, project_name)
             ).fetchone()
+            if not result:
+                # Guard against stale unknown-customer rows: if inference changed customer_id
+                # but a prior run already created the project under a different customer,
+                # find that row by name to avoid creating a duplicate.
+                result = cursor.execute(
+                    "SELECT id FROM projects WHERE project_name = ? LIMIT 1",
+                    (project_name,)
+                ).fetchone()
             if result:
                 project_id = result[0]
                 if owner and owner not in ('Unknown', 'TBD', ''):

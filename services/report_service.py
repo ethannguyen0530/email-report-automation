@@ -14,6 +14,18 @@ STATUS_COLORS = {
 
 class ReportService:
 
+    def _flagged_project_names(self, summary_data):
+        """Return names of At Risk / Delayed projects from the projects list."""
+        names = []
+        for p in summary_data.get('projects', []):
+            if isinstance(p, dict):
+                pname, pstatus = p.get('project_name', ''), p.get('status', '')
+            else:
+                pname, pstatus = p[1], p[3]
+            if pstatus in ('At Risk', 'Delayed'):
+                names.append(pname)
+        return names
+
     def _executive_brief_fallback(self, summary_data):
         """Build a 3-sentence executive brief from raw data (no GPT required)."""
         total = summary_data['total_projects']
@@ -29,16 +41,8 @@ class ReportService:
         health_pct = round(on_track / total * 100) if total else 0
         s1 = f"{on_track} of {total} engagements across {n_customers} clients are on track ({health_pct}% portfolio health)."
 
-        # Sentence 2 — risk / delay (pull names directly from projects list for accuracy)
-        all_projects = summary_data.get('projects', [])
-        flagged_names = []
-        for p in all_projects:
-            if isinstance(p, dict):
-                pname, pstatus = p.get('project_name', ''), p.get('status', '')
-            else:
-                pname, pstatus = p[1], p[3]
-            if pstatus in ('At Risk', 'Delayed'):
-                flagged_names.append(pname)
+        # Sentence 2 — risk / delay
+        flagged_names = self._flagged_project_names(summary_data)
         issues = at_risk + delayed
         if issues:
             name_clause = f" — {', '.join(flagged_names)}" if flagged_names else ""
@@ -67,15 +71,7 @@ class ReportService:
             from openai import OpenAI
             client = OpenAI(api_key=config.OPENAI_API_KEY)
             blockers = summary_data.get('blockers', [])
-            all_projects = summary_data.get('projects', [])
-            flagged = []
-            for p in all_projects:
-                if isinstance(p, dict):
-                    pname, pstatus = p.get('project_name', ''), p.get('status', '')
-                else:
-                    pname, pstatus = p[1], p[3]
-                if pstatus in ('At Risk', 'Delayed'):
-                    flagged.append(pname)
+            flagged = self._flagged_project_names(summary_data)
             context = (
                 f"Portfolio: {summary_data['total_projects']} projects, "
                 f"{summary_data['on_track']} on track, "
@@ -120,7 +116,7 @@ class ReportService:
         email_sources = summary_data.get('email_sources_count', 0)
         F = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
 
-        ai_intro = self._generate_ai_intro(summary_data)
+        ai_intro = summary_data.get('ai_brief') or self._generate_ai_intro(summary_data)
 
         # ── Normalize projects ─────────────────────────────────────────────────
         projects = []
