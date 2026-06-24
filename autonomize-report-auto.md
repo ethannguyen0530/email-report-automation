@@ -6,6 +6,163 @@
 
 ---
 
+## Session 3 — June 23, 2026
+
+### 1. Email Sending — Wired Up and Tested
+
+**Problem:** Report email was not sending (`email: false` in API response).  
+**Root cause:** `SENDER_EMAIL`, `SENDER_PASSWORD`, `REPORT_RECIPIENTS` were all blank in `.env`.  
+**Fix:** Filled in `.env` with Ethan's test credentials for validation:
+- `SENDER_EMAIL=en2569@nyu.edu`
+- `SENDER_PASSWORD=meyvkdmpdegevavy` (NYU Gmail App Password — 16 chars, no spaces)
+- `REPORT_RECIPIENTS=ethann0530@gmail.com,ujjwal.rajbhandari@autonomize.ai`
+
+**IMPORTANT:** These are Ethan's temporary test credentials. Before go-live, Ujjwal must replace `SENDER_EMAIL` and `SENDER_PASSWORD` with his own Gmail + App Password (or use Settings tab for recipients).
+
+**Files changed:** `.env`
+
+---
+
+### 2. Email HTML — Rebuilt for Gmail
+
+**Problem:** Email rendered with broken fonts and broken layout in Gmail ("all fucked up").  
+**Root cause:** Gmail strips external `<link>` tags (Google Fonts) and ignores `display:flex` and `display:grid` in inline styles entirely.  
+**Fix:** Complete rewrite of `generate_executive_report_html()` in `report_service.py`:
+
+- **Fonts:** Removed Google Fonts `<link>`. Now uses system font stack: `-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif` (stored in variable `F`, used everywhere)
+- **Layout engine:** Every multi-column layout replaced with `<table cellpadding="0" cellspacing="0" border="0">` — the only layout that Gmail consistently respects
+- **Status pills:** `display:inline-block` (was `inline-flex`) with a 6px inline `<span>` colored dot
+- **Progress bars:** `<table>` with a 70px width cell (the bar) + a text cell (the %)
+- **Wins / Blockers side-by-side:** 2-column `<table>` at `49% / 2% / 49%` widths
+- **Metric strip:** 5-cell `<table>` row using `metric_td()` inner helper function
+- **Section headers:** `<table>` with a 3px colored bar cell + label cell
+- **All emojis removed:** wins use `+`, blockers/actions use `!`, separator dots use `&middot;`, arrows use `&rarr;`
+
+**Files changed:** `services/report_service.py`
+
+---
+
+### 3. Slack Report — Rebuilt with Block Kit
+
+**Problem:** Slack output was unstructured; emojis made it look unprofessional.  
+**Fix:** Complete rewrite of `build_slack_blocks()` in `slack_service.py`:
+
+Block layout (in order):
+1. `header` — report title
+2. `context` — date/time
+3. `divider`
+4. `section` — 1-sentence AI intro paragraph
+5. `section` with `fields` — 5 metrics: Projects / On Track / At Risk / Delayed / Completed
+6. `divider`
+7. `section` — Customer Snapshot: `CustomerName — N projects — signal` per customer
+8. `divider`
+9. `section` — Actions Required (only if any exist): `! *Project* / Customer / Note`
+10. `divider`
+11. `section` with `fields` — Wins (left) + Blockers (right) in 2-column layout
+12. `divider`
+13. `context` — footer
+
+Formatting rules: completely emoji-free. Uses `!` for blockers/actions, `+` for wins, `·` as separators, standard Slack markdown bold/italic.
+
+**Files changed:** `services/slack_service.py`
+
+---
+
+### 4. Unknown Customer Fix
+
+**Problem:** Projects from CVS, Cigna, Molina, and Autonomize Internal were showing under "Unknown Customer" in the dashboard. GPT had extracted the project update correctly but missed the customer on those emails.
+
+**Fix — Part 1 (existing DB data):** One-off Python script using prefix matching corrected 4 existing records:
+- CVS Integration - UAT Approved → CVS Health
+- Cigna Migration - Phase 1 Complete → Cigna
+- Molina Implementation - Needs Client Review → Molina Healthcare
+- ACI Scan Implementation → Autonomize Internal
+
+**Fix — Part 2 (future prevention):** Added inference logic to `get_or_create_project()` in `schema.py`. When the extracted customer is Unknown, the function now uses a `LIKE` prefix query against known projects to infer the real customer:
+```sql
+SELECT p.customer_id FROM projects p
+JOIN customers c ON p.customer_id = c.id
+WHERE c.name NOT IN ('Unknown Customer', 'Unknown', '')
+AND length(p.project_name) >= 8
+AND (
+    ? LIKE p.project_name || ' %'
+    OR ? LIKE p.project_name || ' - %'
+    OR ? LIKE p.project_name || ': %'
+)
+ORDER BY length(p.project_name) DESC
+LIMIT 1
+```
+
+**Files changed:** `database/schema.py`
+
+---
+
+### 5. Code Review — 5 Bugs Found and Fixed
+
+Full automated code review (8 finder angles × 6 candidates → verify) surfaced and fixed:
+
+| # | File | Bug | Fix |
+|---|---|---|---|
+| 1 | `schema.py` | No `try/finally` in `get_or_create_project` — any SQL exception between connection open and close leaked the SQLite connection | Wrapped entire function body in `try/finally: conn.close()` |
+| 2 | `schema.py` | Extra SQL query (`SELECT name FROM customers WHERE id = ?`) fired unconditionally on every `get_or_create_project` call, even for known customers — overhead on every email in a scan batch | Added optional `customer_name` param; if passed, the lookup is skipped |
+| 3 | `schema.py` | `instr(?, p.project_name) = 1` prefix match too broad — a 5-char project name like "Login" or "Alpha" under any known customer would silently absorb any new project starting with those chars | Replaced with `LIKE p.project_name || ' %'` (requires separator); raised minimum length from 5 → 8 chars |
+| 4 | `slack_service.py` | `n['status']`, `n['type']`, `n['project']` used direct key access — if a project_note dict is missing a key, raises uncaught `KeyError` that propagates out of `build_slack_blocks` (not caught by `SlackApiError` handler) | All `n[key]` → `n.get('key', '')` throughout the notes loop |
+| 5 | `slack_service.py` | Actions header said `ACTIONS REQUIRED (N)` using full list count, but display capped at 8 rows — count and visible lines mismatched for >8 actions | Added `"... and N more"` line when truncated; header count still shows total |
+
+**Files changed:** `database/schema.py`, `services/slack_service.py`
+
+---
+
+### 6. Known Open Issue — APScheduler Crash Loop
+
+**Symptom:** `RuntimeError: cannot schedule new futures after shutdown` in `logs/server.log`. Auto-scan jobs are submitted to a shutdown thread pool executor and silently fail.  
+**Impact:** Auto-scan still runs after service restart, but missed jobs during the crash window are not retried.  
+**Status:** Not fixed in Session 3. Not blocking go-live (manual scan + manual send both work; launchd restarts the service on crash). **Fix before long-term prod use.**
+
+---
+
+## Final File State — After Session 3
+
+```
+email-report-automation/
+├── .env                          SENDER_EMAIL/PASSWORD/RECIPIENTS filled (Ethan's test creds)
+│
+├── database/schema.py            + try/finally in get_or_create_project
+│                                 + optional customer_name param (skip lookup)
+│                                 + LIKE-based prefix inference (min length 8, requires separator)
+│
+├── services/
+│   ├── report_service.py         Email-safe HTML rewrite (table layouts, system fonts, no emojis)
+│   └── slack_service.py          Block Kit rewrite (no emojis, .get() safe access, truncation notice)
+│
+└── [everything else from Session 2 unchanged]
+```
+
+---
+
+## Current Status — After Session 3
+
+**Service:** Running permanently at `http://localhost:5001` via launchd  
+**Auto-scan:** Every 15 minutes (`SCAN_INTERVAL_MINUTES=15`)  
+**Auto-report:** Every 24 hours (`REPORT_SEND_HOURS=24`) — sends email + Slack  
+**Email delivery:** Confirmed working (sent to ethann0530@gmail.com + ujjwal.rajbhandari@autonomize.ai)  
+**Terminal needed:** No
+
+**Still blocked on (Ujjwal to provide before go-live):**
+- `OPENAI_API_KEY` — required for AI extraction
+- `SLACK_BOT_TOKEN` + `SLACK_CHANNEL` — required for Slack delivery
+- `SENDER_EMAIL` + `SENDER_PASSWORD` — Ujjwal's Gmail + App Password (replace Ethan's test creds)
+- `REPORT_RECIPIENTS` → or add via Settings tab in the UI
+- `GMAIL_QUERY` tuned to real project update senders
+- **APScheduler crash loop** — fix `RuntimeError: cannot schedule new futures after shutdown`
+
+**Restart command:**
+```
+launchctl unload ~/Library/LaunchAgents/com.emailreport.plist && launchctl load ~/Library/LaunchAgents/com.emailreport.plist
+```
+
+---
+
 ## Session 2 — June 23, 2026
 
 ### 1. Executive Report — Rebuilt for Executives
@@ -203,73 +360,6 @@ Full code audit surfaced and fixed:
 | 10 | `Dashboard.jsx` | Rapid status changes caused stale `Promise.all` chain to overwrite newer state | Added `_updateVer` ref counter — stale chains are discarded |
 | 11 | `Dashboard.jsx` | `allProjects.findIndex` returns `-1` when health refreshes during modal — `hasNext` incorrectly enabled, position showed "0 of N" | Added `found = currentIdx > -1` guard |
 | 12 | `app.py` + `gmail_service.py` | xlsx/pptx extraction logic duplicated in two places — fixes in one wouldn't reach the other | Extracted to shared `services/file_extractor.py` |
-
----
-
-## Final File State — After Session 2
-
-```
-email-report-automation/
-├── main.py
-├── config.py                     REPORT_SEND_HOURS added; SCAN_INTERVAL_MINUTES=15
-├── start.sh / run.sh / install_service.sh
-├── requirements.txt              + pdfplumber, python-docx, openpyxl, python-pptx
-├── .env                          REPORT_SEND_HOURS=24, SCAN_INTERVAL_MINUTES=15
-├── autonomize-report-auto.md     This file
-├── README.md                     Updated — new pages, endpoints, architecture
-├── HANDOFF.md                    Updated — most gaps now filled
-├── REPO_COVERAGE_AND_QUESTIONS.md   Updated — coverage map current
-│
-├── database/schema.py            Health scores, stale customers fix, get_or_create fix,
-│                                 accomplishments_rich/blockers_rich, email_sources_count
-│
-├── services/
-│   ├── gmail_service.py          Attachment extraction, uses shared file_extractor
-│   ├── file_extractor.py         NEW — shared PDF/Word/Excel/PowerPoint text extraction
-│   ├── extraction_service.py     Unchanged
-│   ├── report_service.py         Full executive-brief rewrite
-│   └── slack_service.py          Unchanged
-│
-├── dashboard/app.py              /api/health, /api/alerts, /api/email-stats,
-│                                 /api/email-detail, /api/stream (SSE), /api/process-file,
-│                                 /api/customers POST/DELETE, /api/recipients CRUD,
-│                                 run_report_send scheduled job
-│
-└── frontend/src/
-    ├── App.jsx                   + Customers, Settings, ProjectDetail routes
-    ├── pages/
-    │   ├── Dashboard.jsx         Health modal + project breakdown + prev/next nav,
-    │   │                         email source modal, updateStatus full sync,
-    │   │                         AbortController, version-guarded re-fetch
-    │   ├── Emails.jsx            Customer filter chips, duplicate-render fix
-    │   ├── Customers.jsx         Customer list + health scores + add/delete
-    │   ├── Settings.jsx          Recipient management
-    │   ├── ProjectDetail.jsx     Per-project update history
-    │   ├── Report.jsx            Unchanged
-    │   └── Uploads.jsx           AI extraction pipeline, xls removed
-    └── components/
-        ├── Sidebar.jsx           + Customers, Settings nav items
-        ├── StatusSelect.jsx      Unchanged
-        ├── StatusBadge.jsx       Unchanged
-        ├── MetricCard.jsx        Unchanged
-        └── ProgressBar.jsx       Unchanged
-```
-
----
-
-## Current Status — After Session 2
-
-**Service:** Running permanently at `http://localhost:5001` via launchd  
-**Auto-scan:** Every 15 minutes (`SCAN_INTERVAL_MINUTES=15`)  
-**Auto-report:** Every 24 hours (`REPORT_SEND_HOURS=24`) — sends email + Slack  
-**GitHub:** Fully up to date  
-**Terminal needed:** No
-
-**Still blocked on (Ujjwal to provide):**
-- `OPENAI_API_KEY` — required for AI extraction
-- `SLACK_BOT_TOKEN` + `SLACK_CHANNEL` — required for Slack delivery
-- `SENDER_EMAIL` + `SENDER_PASSWORD` + `REPORT_RECIPIENTS` (or set in Settings tab)
-- Gmail search query tuned to real project update senders
 
 ---
 

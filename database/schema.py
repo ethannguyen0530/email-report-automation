@@ -107,38 +107,59 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    def get_or_create_project(self, customer_id, project_name, initial_status="In Progress", initial_progress=0, owner="Unknown"):
+    def get_or_create_project(self, customer_id, project_name, initial_status="In Progress", initial_progress=0, owner="Unknown", customer_name=None):
         """Return project ID, creating it if it doesn't exist.
 
         initial_status and initial_progress are only applied on first creation —
         subsequent calls never overwrite them, preserving user-set values.
         owner is updated on existing projects when a non-placeholder value is provided.
+        customer_name can be passed by the caller to skip the extra lookup.
         """
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id FROM projects WHERE customer_id = ? AND project_name = ?",
-            (customer_id, project_name)
-        )
-        result = cursor.fetchone()
-        if result:
-            project_id = result[0]
-            if owner and owner not in ('Unknown', 'TBD', ''):
-                cursor.execute(
-                    "UPDATE projects SET owner = ? WHERE id = ?",
-                    (owner, project_id)
-                )
-                conn.commit()
+        try:
+            cursor = conn.cursor()
+
+            # If this landed under Unknown Customer, try to infer the real customer
+            # by finding a known project whose name is a strict prefix of this one
+            # (separated by space, dash, or colon to avoid short-name false matches).
+            if customer_name is None:
+                row = cursor.execute("SELECT name FROM customers WHERE id = ?", (customer_id,)).fetchone()
+                customer_name = row[0] if row else ''
+            if customer_name in ('Unknown Customer', 'Unknown', ''):
+                inferred = cursor.execute("""
+                    SELECT p.customer_id FROM projects p
+                    JOIN customers c ON p.customer_id = c.id
+                    WHERE c.name NOT IN ('Unknown Customer', 'Unknown', '')
+                    AND length(p.project_name) >= 8
+                    AND (
+                        ? LIKE p.project_name || ' %'
+                        OR ? LIKE p.project_name || ' - %'
+                        OR ? LIKE p.project_name || ': %'
+                    )
+                    ORDER BY length(p.project_name) DESC
+                    LIMIT 1
+                """, (project_name, project_name, project_name)).fetchone()
+                if inferred:
+                    customer_id = inferred[0]
+
+            result = cursor.execute(
+                "SELECT id FROM projects WHERE customer_id = ? AND project_name = ?",
+                (customer_id, project_name)
+            ).fetchone()
+            if result:
+                project_id = result[0]
+                if owner and owner not in ('Unknown', 'TBD', ''):
+                    cursor.execute("UPDATE projects SET owner = ? WHERE id = ?", (owner, project_id))
+                    conn.commit()
+                return project_id
+            cursor.execute(
+                "INSERT INTO projects (customer_id, project_name, status, progress_percent, owner) VALUES (?, ?, ?, ?, ?)",
+                (customer_id, project_name, initial_status, initial_progress, owner)
+            )
+            conn.commit()
+            return cursor.lastrowid
+        finally:
             conn.close()
-            return project_id
-        cursor.execute(
-            "INSERT INTO projects (customer_id, project_name, status, progress_percent, owner) VALUES (?, ?, ?, ?, ?)",
-            (customer_id, project_name, initial_status, initial_progress, owner)
-        )
-        conn.commit()
-        project_id = cursor.lastrowid
-        conn.close()
-        return project_id
 
     def insert_update(self, project_id, update_date, summary, blocker=None, milestone=None, owner_name="Unknown", gmail_id=None, confidence=None):
         conn = self.get_connection()
